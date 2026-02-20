@@ -183,7 +183,7 @@ async def knowledge_lookup(
         total_chars = 0
 
         for c in chunks:
-            # Prefer contextual_text if present, else fallback to text
+            # Prefer contextual_text if present, else fallback object to text
             text = c.get("contextual_text")
             if not text:
                 text = c.get("text", "")
@@ -193,17 +193,22 @@ async def knowledge_lookup(
             if total_chars > MAX_TOTAL_CHARS:
                 break
 
+            # Return in format expected by retrieval_service
             results.append({
-                "content": text,
-                "similarity_score": c.get("score"),
-                "document_filename": c.get("document_filename"),
+                "text": text,  # Changed from "content" to "text"
+                "score": c.get("score"),  # Add score at top level
+                "document_id": c.get("metadata", {}).get("document_id"),  # Extract from metadata
+                "id": c.get("id"),  # Keep chunk ID
+                "similarity_score": c.get("score"),  # Keep for backward compatibility
+                "document_filename": c.get("metadata", {}).get("filename"),  # Extract from metadata
                 "chunk_index": c.get("chunk_index"),
+                "metadata": c.get("metadata", {})  # Include full metadata
             })
 
         rag_logger.info(f"[RAG] Final results count: {len(results)} | Used in output: {len(results) > 0}")
         if len(results) > 0:
             for idx, r in enumerate(results):
-                rag_logger.info(f"[RAG] Used in output: Chunk {idx}: doc='{r['document_filename']}', idx={r['chunk_index']}, score={r['similarity_score']}, content='{r['content']}'")
+                rag_logger.info(f"[RAG] Used in output: Chunk {idx}: doc='{r['document_filename']}', idx={r['chunk_index']}, score={r['similarity_score']}, text='{r['text'] [:100]}'...")
         else:
             rag_logger.info(f"[RAG] No chunks used in output for query='{query[:80]}'")
 

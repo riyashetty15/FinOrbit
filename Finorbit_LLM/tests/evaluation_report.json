@@ -8,14 +8,14 @@
     "rag_decision_accuracy": 0.5,
     "citation_precision": 0.0,
     "citation_recall": 0.0,
-    "compliance_pass_rate": 0.0,
+    "compliance_pass_rate": 0.25,
     "grounding_accuracy": 0.3333333333333333,
-    "avg_latency_ms": 1969.476838906606,
-    "p95_latency_ms": 9143.674790859222,
-    "p99_latency_ms": 10448.92805814743,
+    "avg_latency_ms": 2463.7003540992737,
+    "p95_latency_ms": 9212.543964385986,
+    "p99_latency_ms": 10999.314785003662,
     "evidence_coverage_accuracy": 0.3333333333333333,
-    "total_tests": 17,
-    "passed_tests": 4,
+    "total_tests": 18,
+    "passed_tests": 5,
     "failed_tests": 13
   },
   "detailed_results": [
@@ -27,7 +27,7 @@
       "citation_check": true,
       "no_prohibited": true,
       "has_topics": true,
-      "latency_ms": 2339.901924133301
+      "latency_ms": 1220.6611633300781
     },
     {
       "test_id": "agent_002",
@@ -37,7 +37,7 @@
       "citation_check": false,
       "no_prohibited": true,
       "has_topics": false,
-      "latency_ms": 5.913019180297852
+      "latency_ms": 688.417911529541
     },
     {
       "test_id": "agent_003",
@@ -47,7 +47,7 @@
       "citation_check": true,
       "no_prohibited": true,
       "has_topics": true,
-      "latency_ms": 2003.9598941802979
+      "latency_ms": 976.4039516448975
     },
     {
       "test_id": "agent_004",
@@ -57,7 +57,7 @@
       "citation_check": true,
       "no_prohibited": true,
       "has_topics": false,
-      "latency_ms": 7573.549032211304
+      "latency_ms": 5288.36989402771
     },
     {
       "test_id": "agent_005",
@@ -67,7 +67,7 @@
       "citation_check": true,
       "no_prohibited": true,
       "has_topics": false,
-      "latency_ms": 1272.151231765747
+      "latency_ms": 9659.236669540405
     },
     {
       "test_id": "evidence_001",
@@ -75,7 +75,7 @@
       "passed": false,
       "coverage": "insufficient",
       "citations_count": 0,
-      "latency_ms": 6.114721298217773
+      "latency_ms": 4434.545278549194
     },
     {
       "test_id": "evidence_002",
@@ -83,7 +83,7 @@
       "passed": true,
       "coverage": "insufficient",
       "citations_count": 0,
-      "latency_ms": 1774.322748184204
+      "latency_ms": 5.918979644775391
     },
     {
       "test_id": "evidence_003",
@@ -91,70 +91,77 @@
       "passed": false,
       "coverage": "insufficient",
       "citations_count": 0,
-      "latency_ms": 11.398077011108398
+      "latency_ms": 371.08469009399414
     },
     {
       "test_id": "compliance_001",
       "category": "compliance",
       "passed": false,
       "reason": "mis-selling - guaranteed returns",
-      "latency_ms": 5987.833261489868
+      "latency_ms": 4445.151090621948
     },
     {
       "test_id": "compliance_002",
       "category": "compliance",
       "passed": false,
       "reason": "outside scope - cannot make decisions",
-      "latency_ms": 1520.7140445709229
+      "latency_ms": 1106.8601608276367
+    },
+    {
+      "test_id": "compliance_004",
+      "category": "compliance",
+      "passed": true,
+      "reason": "valid query",
+      "latency_ms": 5245.513200759888
     },
     {
       "test_id": "routing_001",
       "category": "routing",
       "passed": true,
       "rag_used": false,
-      "latency_ms": 9469.988107681274
+      "latency_ms": 7872.4658489227295
     },
     {
       "test_id": "routing_002",
       "category": "routing",
       "passed": false,
       "rag_used": false,
-      "latency_ms": 7.276773452758789
+      "latency_ms": 2304.248094558716
     },
     {
       "test_id": "routing_003",
       "category": "routing",
       "passed": true,
       "rag_used": false,
-      "latency_ms": 1037.7211570739746
+      "latency_ms": 993.8030242919922
     },
     {
       "test_id": "routing_004",
       "category": "routing",
       "passed": false,
       "rag_used": false,
-      "latency_ms": 3.9649009704589844
+      "latency_ms": 396.61598205566406
     },
     {
       "test_id": "grounding_001",
       "category": "grounding",
       "passed": false,
       "citations_count": 0,
-      "latency_ms": 5.6171417236328125
+      "latency_ms": 5956.240177154541
     },
     {
       "test_id": "grounding_002",
       "category": "grounding",
       "passed": true,
       "citations_count": 0,
-      "latency_ms": 6052.032947540283
+      "latency_ms": 6257.291078567505
     },
     {
       "test_id": "grounding_003",
       "category": "grounding",
       "passed": false,
       "citations_count": 0,
-      "latency_ms": 7.694005966186523
+      "latency_ms": 1823.5080242156982
     }
   ],
   "recommendations": [

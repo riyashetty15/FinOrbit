@@ -559,9 +559,11 @@ async def process_query(request: QueryRequest):
                     
                     # Retrieve evidence with coverage scoring
                     try:
+                        # Let retrieval_service determine the correct RAG module
+                        # based on query content (module parameter = None triggers auto-detection)
                         evidence_pack = await retrieval_service.retrieve_evidence(
                             query=user_input,
-                            module=route_intent.module,
+                            module=None,  # Auto-detect RAG module from query
                             top_k=8,
                             filters=filters
                         )
