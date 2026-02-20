@@ -376,7 +376,7 @@ filters = {
 ### Guardrails Pipeline
 
 1. **Pre-Guardrails**
-   - PII masking (Aadhaar, PAN, phone numbers)
+   - PII masking (Drivers License, phone numbers)
    - Jailbreak attempt detection
    - Input sanitization
 
