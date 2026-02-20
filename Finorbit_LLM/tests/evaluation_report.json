@@ -1,0 +1,169 @@
+{
+  "summary": {
+    "rag_precision": 0,
+    "rag_recall": 0,
+    "rag_hit_rate": 0.0,
+    "rag_avg_similarity": 0,
+    "routing_accuracy": 0.0,
+    "rag_decision_accuracy": 0.5,
+    "citation_precision": 0.0,
+    "citation_recall": 0.0,
+    "compliance_pass_rate": 0.0,
+    "grounding_accuracy": 0.3333333333333333,
+    "avg_latency_ms": 1969.476838906606,
+    "p95_latency_ms": 9143.674790859222,
+    "p99_latency_ms": 10448.92805814743,
+    "evidence_coverage_accuracy": 0.3333333333333333,
+    "total_tests": 17,
+    "passed_tests": 4,
+    "failed_tests": 13
+  },
+  "detailed_results": [
+    {
+      "test_id": "agent_001",
+      "category": "agent_response",
+      "passed": false,
+      "routed_correctly": false,
+      "citation_check": true,
+      "no_prohibited": true,
+      "has_topics": true,
+      "latency_ms": 2339.901924133301
+    },
+    {
+      "test_id": "agent_002",
+      "category": "agent_response",
+      "passed": false,
+      "routed_correctly": false,
+      "citation_check": false,
+      "no_prohibited": true,
+      "has_topics": false,
+      "latency_ms": 5.913019180297852
+    },
+    {
+      "test_id": "agent_003",
+      "category": "agent_response",
+      "passed": false,
+      "routed_correctly": false,
+      "citation_check": true,
+      "no_prohibited": true,
+      "has_topics": true,
+      "latency_ms": 2003.9598941802979
+    },
+    {
+      "test_id": "agent_004",
+      "category": "agent_response",
+      "passed": false,
+      "routed_correctly": false,
+      "citation_check": true,
+      "no_prohibited": true,
+      "has_topics": false,
+      "latency_ms": 7573.549032211304
+    },
+    {
+      "test_id": "agent_005",
+      "category": "agent_response",
+      "passed": false,
+      "routed_correctly": false,
+      "citation_check": true,
+      "no_prohibited": true,
+      "has_topics": false,
+      "latency_ms": 1272.151231765747
+    },
+    {
+      "test_id": "evidence_001",
+      "category": "evidence_coverage",
+      "passed": false,
+      "coverage": "insufficient",
+      "citations_count": 0,
+      "latency_ms": 6.114721298217773
+    },
+    {
+      "test_id": "evidence_002",
+      "category": "evidence_coverage",
+      "passed": true,
+      "coverage": "insufficient",
+      "citations_count": 0,
+      "latency_ms": 1774.322748184204
+    },
+    {
+      "test_id": "evidence_003",
+      "category": "evidence_coverage",
+      "passed": false,
+      "coverage": "insufficient",
+      "citations_count": 0,
+      "latency_ms": 11.398077011108398
+    },
+    {
+      "test_id": "compliance_001",
+      "category": "compliance",
+      "passed": false,
+      "reason": "mis-selling - guaranteed returns",
+      "latency_ms": 5987.833261489868
+    },
+    {
+      "test_id": "compliance_002",
+      "category": "compliance",
+      "passed": false,
+      "reason": "outside scope - cannot make decisions",
+      "latency_ms": 1520.7140445709229
+    },
+    {
+      "test_id": "routing_001",
+      "category": "routing",
+      "passed": true,
+      "rag_used": false,
+      "latency_ms": 9469.988107681274
+    },
+    {
+      "test_id": "routing_002",
+      "category": "routing",
+      "passed": false,
+      "rag_used": false,
+      "latency_ms": 7.276773452758789
+    },
+    {
+      "test_id": "routing_003",
+      "category": "routing",
+      "passed": true,
+      "rag_used": false,
+      "latency_ms": 1037.7211570739746
+    },
+    {
+      "test_id": "routing_004",
+      "category": "routing",
+      "passed": false,
+      "rag_used": false,
+      "latency_ms": 3.9649009704589844
+    },
+    {
+      "test_id": "grounding_001",
+      "category": "grounding",
+      "passed": false,
+      "citations_count": 0,
+      "latency_ms": 5.6171417236328125
+    },
+    {
+      "test_id": "grounding_002",
+      "category": "grounding",
+      "passed": true,
+      "citations_count": 0,
+      "latency_ms": 6052.032947540283
+    },
+    {
+      "test_id": "grounding_003",
+      "category": "grounding",
+      "passed": false,
+      "citations_count": 0,
+      "latency_ms": 7.694005966186523
+    }
+  ],
+  "recommendations": [
+    "RAG Precision is low (<70%). Consider improving retrieval filters or re-ranking.",
+    "RAG Recall is low (<60%). Consider expanding chunk size or improving embeddings.",
+    "Routing accuracy is low (<80%). Review agent selection logic and keyword patterns.",
+    "Citation recall is low (<80%). Ensure evidence extraction is comprehensive.",
+    "Compliance pass rate is low (<90%). Review guardrails and safety filters.",
+    "P99 latency > 5s. Consider caching, query optimization, or timeout adjustments.",
+    "Grounding accuracy is low (<85%). Improve citation extraction and validation."
+  ]
+}

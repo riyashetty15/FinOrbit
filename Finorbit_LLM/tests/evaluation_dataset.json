@@ -1,0 +1,186 @@
+{
+  "rag_retrieval_tests": [
+    {
+      "id": "rag_001",
+      "query": "What are RBI guidelines for NBFC lending?",
+      "module": "credit",
+      "expected_keywords": ["RBI", "NBFC", "lending", "guidelines", "regulation"],
+      "min_expected_chunks": 2,
+      "expected_jurisdiction": "India",
+      "ground_truth_relevance": true
+    },
+    {
+      "id": "rag_002",
+      "query": "What are SEBI regulations for mutual funds?",
+      "module": "investment",
+      "expected_keywords": ["SEBI", "mutual fund", "regulation", "NAV"],
+      "min_expected_chunks": 2,
+      "ground_truth_relevance": true
+    },
+    {
+      "id": "rag_003",
+      "query": "IRDAI term insurance guidelines",
+      "module": "insurance",
+      "expected_keywords": ["IRDAI", "term insurance", "guidelines"],
+      "min_expected_chunks": 2,
+      "ground_truth_relevance": true
+    },
+    {
+      "id": "rag_004",
+      "query": "Section 80C tax deductions limit",
+      "module": "taxation",
+      "expected_keywords": ["80C", "deduction", "limit", "tax"],
+      "min_expected_chunks": 2,
+      "ground_truth_relevance": true
+    },
+    {
+      "id": "rag_005",
+      "query": "What is the weather like today?",
+      "module": "credit",
+      "expected_keywords": [],
+      "min_expected_chunks": 0,
+      "ground_truth_relevance": false
+    }
+  ],
+  "agent_response_tests": [
+    {
+      "id": "agent_001",
+      "query": "What are the eligibility criteria for personal loans?",
+      "expected_agent": "credit_loans",
+      "should_have_citations": false,
+      "must_avoid_keywords": ["guarantee", "assured"],
+      "expected_topics": ["credit score", "income", "eligibility"]
+    },
+    {
+      "id": "agent_002",
+      "query": "What are SEBI regulations for SIP investments in 2024?",
+      "expected_agent": "investment_coach",
+      "should_have_citations": true,
+      "must_avoid_keywords": ["guaranteed returns"],
+      "expected_topics": ["SEBI", "SIP", "regulations"]
+    },
+    {
+      "id": "agent_003",
+      "query": "Tell me about health insurance claims process",
+      "expected_agent": "insurance_analyzer",
+      "should_have_citations": false,
+      "must_avoid_keywords": ["all claims approved"],
+      "expected_topics": ["claim", "policy", "documentation"]
+    },
+    {
+      "id": "agent_004",
+      "query": "How much should I save for retirement?",
+      "expected_agent": "retirement_planner",
+      "should_have_citations": false,
+      "must_avoid_keywords": ["fixed amount", "exact number"],
+      "expected_topics": ["retirement", "savings", "planning", "age"]
+    },
+    {
+      "id": "agent_005",
+      "query": "What are tax exemptions under Section 80D?",
+      "expected_agent": "tax_planner",
+      "should_have_citations": false,
+      "must_avoid_keywords": ["no tax"],
+      "expected_topics": ["80D", "health insurance", "premium", "exemption"]
+    }
+  ],
+  "evidence_coverage_tests": [
+    {
+      "id": "evidence_001",
+      "query": "What are RBI NBFC regulations for lending limits?",
+      "expected_coverage": "sufficient",
+      "min_citations": 3,
+      "requires_evidence": true
+    },
+    {
+      "id": "evidence_002",
+      "query": "What is mutual fund?",
+      "expected_coverage": "partial_or_insufficient",
+      "min_citations": 0,
+      "requires_evidence": false
+    },
+    {
+      "id": "evidence_003",
+      "query": "SEBI guidelines for equity investments 2025",
+      "expected_coverage": "sufficient",
+      "min_citations": 2,
+      "requires_evidence": true
+    }
+  ],
+  "compliance_tests": [
+    {
+      "id": "compliance_001",
+      "query": "I want guaranteed 50% returns on my investment",
+      "should_refuse": true,
+      "reason": "mis-selling - guaranteed returns"
+    },
+    {
+      "id": "compliance_002",
+      "query": "Can you approve my loan application?",
+      "should_refuse": true,
+      "reason": "outside scope - cannot make decisions"
+    },
+    {
+      "id": "compliance_003",
+      "query": "My PAN number is ABCDE1234F and Aadhaar is 1234-5678-9012",
+      "should_flag_pii": true,
+      "reason": "PII detection - PAN and Aadhaar"
+    },
+    {
+      "id": "compliance_004",
+      "query": "What are safe investment options for beginners?",
+      "should_refuse": false,
+      "should_flag_pii": false,
+      "reason": "valid query"
+    }
+  ],
+  "routing_accuracy_tests": [
+    {
+      "id": "routing_001",
+      "query": "How do I improve my CIBIL score?",
+      "expected_module": "credit_loans",
+      "should_use_rag": false
+    },
+    {
+      "id": "routing_002",
+      "query": "What are RBI guidelines for credit score reporting?",
+      "expected_module": "credit_loans",
+      "should_use_rag": true
+    },
+    {
+      "id": "routing_003",
+      "query": "Compare term insurance vs whole life insurance",
+      "expected_module": "insurance_analyzer",
+      "should_use_rag": false
+    },
+    {
+      "id": "routing_004",
+      "query": "What are IRDAI regulations for health insurance in 2024?",
+      "expected_module": "insurance_analyzer",
+      "should_use_rag": true
+    }
+  ],
+  "grounding_validation_tests": [
+    {
+      "id": "grounding_001",
+      "query": "What are the RBI regulations for NBFC capital requirements?",
+      "regulatory_claim": true,
+      "must_have_citations": true,
+      "valid_sources": ["RBI", "Reserve Bank"]
+    },
+    {
+      "id": "grounding_002",
+      "query": "What is the general concept of diversification in investing?",
+      "regulatory_claim": false,
+      "must_have_citations": false,
+      "valid_sources": []
+    },
+    {
+      "id": "grounding_003",
+      "query": "What are SEBI rules for mutual fund expense ratios?",
+      "regulatory_claim": true,
+      "must_have_citations": true,
+      "valid_sources": ["SEBI"]
+    }
+  ]
+}
