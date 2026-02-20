@@ -1,16 +1,6 @@
 # FinOrbit Complete Documentation
 
-**Last Updated:** February 17, 2026
-
 This comprehensive guide covers the architecture, implementation, and deployment of the FinOrbit financial assistant system with production-grade RAG capabilities.
-
----
-
-## Table of Contents
-
-1. [System Architecture Overview](#1-system-architecture-overview)
-2. [Production-Grade RAG Implementation](#2-production-grade-rag-implementation)
-3. [Deployment Guide](#3-deployment-guide)
 
 ---
 
@@ -518,7 +508,6 @@ Expected:
 
 1. **Python 3.11+** installed
 2. **PostgreSQL with pgvector** extension (or use Docker)
-3. **Google Gemini API Key** ([Get one here](https://makersuite.google.com/app/apikey))
 
 ## 3.2 Step 1: Database Setup (PostgreSQL + pgvector)
 
@@ -855,5 +844,3 @@ This implementation provides:
 - Scalable deployment with Docker support
 
 **For issues, check server logs in terminals for detailed errors.**
-
-**Last Updated:** February 17, 2026
