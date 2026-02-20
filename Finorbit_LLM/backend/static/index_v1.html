@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FinOrbit Assistant</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #0b1020;
+      --panel: #121a33;
+      --panel-2: #0f162d;
+      --text: #e6ebff;
+      --muted: #9fb0ff;
+      --accent: #6aa0ff;
+      --accent-2: #7be7ff;
+      --success: #44d19f;
+      --error: #ff6b6b;
+      --border: #253158;
+      --shadow: rgba(6, 12, 34, 0.6);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background: radial-gradient(1200px 600px at 15% -10%, #1b2550 0%, #0b1020 55%, #080c1a 100%);
+      color: var(--text);
+    }
+
+    .app {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      display: grid;
+      place-items: center;
+      box-shadow: 0 12px 28px var(--shadow);
+      font-weight: 700;
+      color: #0b1020;
+    }
+
+    .title {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .pill {
+      padding: 8px 14px;
+      background: rgba(106, 160, 255, 0.12);
+      border: 1px solid rgba(106, 160, 255, 0.35);
+      color: var(--accent-2);
+      border-radius: 999px;
+      font-size: 12px;
+      letter-spacing: 0.4px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 20px;
+    }
+
+    .panel {
+      background: linear-gradient(160deg, rgba(18, 26, 51, 0.9), rgba(10, 16, 34, 0.95));
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 18px 40px var(--shadow);
+    }
+
+    .panel h3 {
+      margin: 0;
+      font-size: 14px;
+      letter-spacing: 0.4px;
+      color: var(--muted);
+    }
+
+    .settings {
+      padding: 18px;
+      display: grid;
+      gap: 16px;
+    }
+
+    label {
+      font-size: 12px;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--text);
+      outline: none;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 110px;
+    }
+
+    .chat {
+      display: flex;
+      flex-direction: column;
+      height: 640px;
+    }
+
+    .chat-header {
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .messages {
+      flex: 1;
+      padding: 18px 22px;
+      overflow-y: auto;
+      display: grid;
+      gap: 16px;
+    }
+
+    .message {
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: rgba(10, 16, 34, 0.7);
+      border: 1px solid rgba(37, 49, 88, 0.7);
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    .message.user {
+      background: rgba(106, 160, 255, 0.16);
+      border-color: rgba(106, 160, 255, 0.4);
+      align-self: flex-end;
+    }
+
+    .message.assistant {
+      background: rgba(18, 26, 51, 0.85);
+      border-color: rgba(45, 65, 120, 0.7);
+    }
+
+    .message .meta {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .composer {
+      border-top: 1px solid var(--border);
+      padding: 16px 20px 20px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    button {
+      padding: 10px 16px;
+      border-radius: 12px;
+      border: none;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #0b1020;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .status {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(68, 209, 159, 0.2);
+      color: var(--success);
+      font-size: 11px;
+      border: 1px solid rgba(68, 209, 159, 0.4);
+    }
+
+    .error {
+      color: var(--error);
+    }
+
+    @media (max-width: 980px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+      .chat {
+        height: 540px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="logo">F</div>
+        <div>
+          <div class="title">FinOrbit Assistant</div>
+          <div class="subtitle">Unified financial planning with compliance guardrails</div>
+        </div>
+      </div>
+      <span class="pill">Connected to /query</span>
+    </header>
+
+    <div class="layout">
+      <aside class="panel settings">
+        <div>
+          <h3>Session Settings</h3>
+        </div>
+        <div>
+          <label for="userId">User ID</label>
+          <input id="userId" placeholder="user_001" />
+        </div>
+        <div>
+          <label for="conversationId">Conversation ID</label>
+          <input id="conversationId" placeholder="conv_001" />
+        </div>
+        <div>
+          <label for="profileHint">Optional profile hints</label>
+          <textarea id="profileHint" placeholder="Example: I am 32, income 12 lakh, moderate risk, salaried"></textarea>
+        </div>
+        <div class="status" id="connectionStatus">Checking server…</div>
+        <div class="tag" id="healthTag" style="display:none;">Healthy</div>
+      </aside>
+
+      <section class="panel chat">
+        <div class="chat-header">
+          <div>
+            <div class="title" style="font-size:16px;">Advisor Console</div>
+            <div class="subtitle">Ask a question and get validated guidance</div>
+          </div>
+          <button class="ghost" id="clearChat">Clear</button>
+        </div>
+        <div class="messages" id="messages"></div>
+        <div class="composer">
+          <textarea id="queryInput" placeholder="Ask about loans, investments, insurance, or taxes…"></textarea>
+          <div class="actions">
+            <span class="status" id="requestStatus">Ready</span>
+            <button id="sendBtn">Send</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const userIdInput = document.getElementById('userId');
+    const conversationIdInput = document.getElementById('conversationId');
+    const profileHintInput = document.getElementById('profileHint');
+    const queryInput = document.getElementById('queryInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const messages = document.getElementById('messages');
+    const requestStatus = document.getElementById('requestStatus');
+    const connectionStatus = document.getElementById('connectionStatus');
+    const healthTag = document.getElementById('healthTag');
+    const clearChatBtn = document.getElementById('clearChat');
+
+    const storageKeys = {
+      userId: 'finorbit.userId',
+      conversationId: 'finorbit.conversationId',
+      profileHint: 'finorbit.profileHint'
+    };
+
+    function loadDefaults() {
+      userIdInput.value = localStorage.getItem(storageKeys.userId) || `user_${Math.floor(Math.random() * 1000)}`;
+      conversationIdInput.value = localStorage.getItem(storageKeys.conversationId) || `conv_${Math.floor(Math.random() * 1000)}`;
+      profileHintInput.value = localStorage.getItem(storageKeys.profileHint) || '';
+    }
+
+    function persistDefaults() {
+      localStorage.setItem(storageKeys.userId, userIdInput.value.trim());
+      localStorage.setItem(storageKeys.conversationId, conversationIdInput.value.trim());
+      localStorage.setItem(storageKeys.profileHint, profileHintInput.value.trim());
+    }
+
+    function addMessage(role, content, meta) {
+      const msg = document.createElement('div');
+      msg.className = `message ${role}`;
+      const metaEl = document.createElement('div');
+      metaEl.className = 'meta';
+      metaEl.textContent = meta || (role === 'user' ? 'You' : 'FinOrbit');
+      msg.appendChild(metaEl);
+      const text = document.createElement('div');
+      text.textContent = content;
+      msg.appendChild(text);
+      messages.appendChild(msg);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    async function checkHealth() {
+      try {
+        const res = await fetch('/health');
+        if (!res.ok) throw new Error('Health check failed');
+        const data = await res.json();
+        connectionStatus.textContent = `Server: ${data.status}`;
+        healthTag.style.display = 'inline-flex';
+      } catch (err) {
+        connectionStatus.textContent = 'Server unreachable';
+        connectionStatus.classList.add('error');
+        healthTag.style.display = 'none';
+      }
+    }
+
+    async function sendQuery() {
+      const query = queryInput.value.trim();
+      if (!query) return;
+
+      persistDefaults();
+      const profileHint = profileHintInput.value.trim();
+      const combinedQuery = profileHint ? `${profileHint}\n\nUser question: ${query}` : query;
+
+      addMessage('user', query, 'User');
+      queryInput.value = '';
+      requestStatus.textContent = 'Sending…';
+      sendBtn.disabled = true;
+
+      try {
+        const response = await fetch('/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: userIdInput.value.trim(),
+            conversationId: conversationIdInput.value.trim(),
+            query: combinedQuery
+          })
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          const errorMessage = data?.detail?.error || data?.detail || 'Request failed';
+          addMessage('assistant', errorMessage, 'Error');
+        } else {
+          addMessage('assistant', data.response || data.summary || JSON.stringify(data));
+        }
+      } catch (err) {
+        addMessage('assistant', 'Network error. Check the server logs.', 'Error');
+      } finally {
+        requestStatus.textContent = 'Ready';
+        sendBtn.disabled = false;
+      }
+    }
+
+    sendBtn.addEventListener('click', sendQuery);
+    queryInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+        sendQuery();
+      }
+    });
+    clearChatBtn.addEventListener('click', () => {
+      messages.innerHTML = '';
+    });
+
+    loadDefaults();
+    checkHealth();
+  </script>
+</body>
+</html>

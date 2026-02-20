@@ -1,0 +1,61 @@
+# ============================================================================
+# LlamaIndex Core Dependencies
+# ============================================================================
+llama-index-core==0.14.7
+llama-index-vector-stores-postgres==0.7.1
+llama-index-embeddings-huggingface==0.6.1
+llama-index-retrievers-bm25==0.6.5
+# ============================================================================
+# Database & Vector Store
+# ============================================================================
+psycopg2-binary==2.9.11
+pgvector==0.4.1
+
+# ============================================================================
+# Embedding Models
+# ============================================================================
+sentence-transformers==5.1.2
+torch==2.9.0
+
+# ============================================================================
+# Configuration & Utilities
+# ============================================================================
+python-dotenv==1.2.1
+
+# ============================================================================
+# PDF Processing & Document Parsing
+# ============================================================================
+PyMuPDF==1.26.6  # fitz for PDF text extraction (fallback)
+ocrmypdf==16.11.1  # OCR for scanned PDFs
+llama-parse==0.6.54  # LlamaParse for multi-format document parsing (PDF, DOCX, PPTX, images, etc.)
+
+# ============================================================================
+# OCR Support (Optional but recommended)
+# ============================================================================
+pytesseract==0.3.13
+pdf2image==1.17.0
+Pillow==10.3.0
+
+# ============================================================================
+# Additional Utilities
+# ============================================================================
+numpy==2.3.4
+nest-asyncio==1.6.0  # For async support in QueryFusionRetriever (applied conditionally)
+
+# ============================================================================
+# MCP Server Dependencies
+# ============================================================================
+mcp==1.21.1
+# LLM clients for HyDE (optional - install as needed)
+# openai==1.109.1  # For OpenAI LLM
+llama-index-llms-gemini==0.6.1
+google-generativeai==0.8.3
+# anthropic==0.72.0  # For Anthropic LLM
+
+# ============================================================================
+# FastAPI Dependencies
+# ============================================================================
+fastapi==0.120.4
+uvicorn[standard]==0.34.0  # Fixed: 0.38.0 has loop_factory conflict with nest-asyncio
+python-multipart==0.0.20
+

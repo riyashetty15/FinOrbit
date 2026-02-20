@@ -1,0 +1,8 @@
+block_message: "I can’t help with that request. Please rephrase your question in a safe, legal way."
+
+block_patterns:
+  - "\\bhow to (hack|steal|commit fraud)\\b"
+  - "\\b(make|build) a bomb\\b"
+
+soft_warn_patterns:
+  - "\\bguaranteed returns\\b"

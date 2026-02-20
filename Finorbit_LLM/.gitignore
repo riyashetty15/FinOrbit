@@ -1,0 +1,16 @@
+.env
+__pycache__/
+*.py[cod]
+*.log
+*.bak
+gituse.txt
+nul
+.venv/
+.vscode/
+*.egg-info/
+dist/
+build/mcp_server_archive_*.tar.gz
+
+# Logs directory (all files)
+logs/
+*.jsonl

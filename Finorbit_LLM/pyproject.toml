@@ -1,0 +1,72 @@
+[project]
+name = "finorbit-backend"
+version = "0.1.0"
+description = "Finorbit Backend - Unified Financial Planning Assistant with Validation Pipeline"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    {name = "Finorbit Team", email = "riyashetty1598@gmail.com"}
+]
+
+dependencies = [
+    # Core Backend (Google Gemini API)
+    "google-generativeai>=0.3.0",
+    "openai>=1.100.0",
+    "openai-agents>=0.6.1",
+    "fastapi>=0.116.0",
+    "uvicorn[standard]>=0.35.0",
+    "pydantic>=2.11.0",
+    "pydantic-settings>=2.10.0",
+    "python-dotenv>=1.0.0",
+
+    # LangGraph & LangChain (for specialist agents)
+    "langgraph>=0.2.76",
+    "langgraph-checkpoint>=2.0.0",
+    "langchain>=0.3.0",
+    "langchain-core>=0.3.0",
+    "langchain-google-genai>=0.2.0",
+
+    # Database
+    "sqlalchemy>=2.0.0",
+    "asyncpg>=0.30.0",
+
+    # Async DB helpers
+    "greenlet>=3.0.0",
+
+    # FODE
+    "pyyaml>=6.0.2",
+
+    # HTTP Client (used by specialist agents)
+    "requests>=2.32.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-mock>=3.14.0",
+    "black>=23.12.0",
+    "ruff>=0.12.0",
+    "mypy>=1.17.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["backend"]
+
+[tool.black]
+line-length = 100
+target-version = ['py312']
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false

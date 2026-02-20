@@ -1,0 +1,138 @@
+services:
+  # PostgreSQL database with pgvector extension
+  postgres:
+    image: ankane/pgvector:latest
+    container_name: finorbit-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-financial_rag}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-financial_rag}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - finorbit-network
+    restart: unless-stopped
+
+  # FastAPI application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: finorbit-app
+    environment:
+      # Database configuration
+      DB_HOST: postgres
+      DB_NAME: ${DB_NAME:-financial_rag}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_PORT: 5432
+      DB_SSLMODE: ${DB_SSLMODE:-prefer}
+
+      # Embedding configuration
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-mukaj/fin-mpnet-base}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-768}
+      EMBEDDING_DEVICE: ${EMBEDDING_DEVICE:-cpu}
+      EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-32}
+
+      # LlamaIndex configuration
+      LLAMAINDEX_CHUNK_SIZE: ${LLAMAINDEX_CHUNK_SIZE:-512}
+      LLAMAINDEX_CHUNK_OVERLAP: ${LLAMAINDEX_CHUNK_OVERLAP:-50}
+      LLAMAINDEX_TOP_K: ${LLAMAINDEX_TOP_K:-5}
+      LLAMAINDEX_SIMILARITY_TOP_K: ${LLAMAINDEX_SIMILARITY_TOP_K:-5}
+      LLAMAINDEX_RESPONSE_MODE: ${LLAMAINDEX_RESPONSE_MODE:-compact}
+      LLAMAINDEX_STREAMING: ${LLAMAINDEX_STREAMING:-false}
+
+      # OCR configuration
+      OCR_ENABLED: ${OCR_ENABLED:-true}
+      OCR_LANGUAGE: ${OCR_LANGUAGE:-eng}
+      OCR_DPI: ${OCR_DPI:-300}
+      USE_OCRMYPDF: ${USE_OCRMYPDF:-true}
+      OCR_TIMEOUT: ${OCR_TIMEOUT:-300}
+
+      # Pipeline configuration
+      PIPELINE_VERSION: ${PIPELINE_VERSION:-1.0.0}
+      # OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-placeholder}
+      
+      # LLM Configuration (Gemini/OpenAI)
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      LLAMAINDEX_LLM_MODEL: ${LLAMAINDEX_LLM_MODEL:-models/gemini-1.5-flash}
+
+      # HyDE and Rerank (optional)
+      HYDE_ENABLED: ${HYDE_ENABLED:-false}
+      RERANK_ENABLED: ${RERANK_ENABLED:-false}
+
+    volumes:
+      # Mount for uploaded files and data
+      - app_data:/app/data
+      # Mount for downloaded models (HuggingFace + Torch cache)
+      - model_cache:/root/.cache
+      # Mount for temporary file processing
+      - temp_data:/tmp
+
+    ports:
+      - "${APP_PORT:-8000}:8000"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import requests; requests.get(\"http://localhost:8000/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    networks:
+      - finorbit-network
+
+    restart: unless-stopped
+
+  # MCP Server (optional - uncomment if needed)
+  # mcp-server:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: finorbit-mcp-server
+  #   command: ["python", "run_mcp_server.py"]
+  #   environment:
+  #     DB_HOST: postgres
+  #     DB_NAME: ${DB_NAME:-financial_rag}
+  #     DB_USER: ${DB_USER:-postgres}
+  #     DB_PASSWORD: ${DB_PASSWORD:-postgres}
+  #     DB_PORT: 5432
+  #     EMBEDDING_MODEL: ${EMBEDDING_MODEL:-mukaj/fin-mpnet-base}
+  #     EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-768}
+  #   volumes:
+  #     - model_cache:/root/.cache
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   networks:
+  #     - finorbit-network
+  #   restart: unless-stopped
+
+networks:
+  finorbit-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  app_data:
+    driver: local
+  model_cache:
+    driver: local
+  temp_data:
+    driver: local

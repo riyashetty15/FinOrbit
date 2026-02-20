@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FinOrbit – Financial OS</title>
+  <style>
+    :root {
+      --bg: #080c1a;
+      --bg-2: #0b1020;
+      --panel: #111827;
+      --panel-2: #0f162d;
+      --card: #161e35;
+      --card-hover: #1a2440;
+      --text: #e6ebff;
+      --text-2: #c5cde8;
+      --muted: #7b8ab5;
+      --accent: #6aa0ff;
+      --accent-2: #7be7ff;
+      --accent-glow: rgba(106, 160, 255, 0.15);
+      --success: #34d399;
+      --success-bg: rgba(52, 211, 153, 0.12);
+      --warning: #fbbf24;
+      --warning-bg: rgba(251, 191, 36, 0.12);
+      --error: #f87171;
+      --error-bg: rgba(248, 113, 113, 0.12);
+      --info: #60a5fa;
+      --info-bg: rgba(96, 165, 250, 0.12);
+      --border: #1e293b;
+      --border-2: #253158;
+      --shadow: rgba(0, 0, 0, 0.4);
+      --radius: 12px;
+      --radius-sm: 8px;
+      --radius-lg: 16px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ===== LAYOUT ===== */
+    .app { display: flex; flex-direction: column; height: 100vh; }
+
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 20px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      min-height: 56px;
+      z-index: 10;
+    }
+
+    .brand { display: flex; align-items: center; gap: 10px; }
+
+    .logo {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      display: grid; place-items: center;
+      font-weight: 800; font-size: 16px; color: var(--bg);
+    }
+
+    .brand-text .title { font-size: 16px; font-weight: 700; letter-spacing: 0.3px; }
+    .brand-text .subtitle { font-size: 11px; color: var(--muted); }
+
+    .top-bar-right { display: flex; align-items: center; gap: 12px; }
+
+    .status-pills { display: flex; gap: 8px; align-items: center; }
+
+    .pill {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .pill-success { background: var(--success-bg); color: var(--success); border: 1px solid rgba(52,211,153,0.3); }
+    .pill-info { background: var(--info-bg); color: var(--info); border: 1px solid rgba(96,165,250,0.3); }
+
+    .mode-toggle {
+      display: flex;
+      background: var(--card);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .mode-toggle button {
+      padding: 5px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .mode-toggle button.active {
+      background: var(--accent);
+      color: var(--bg);
+    }
+
+    /* ===== THREE-PANEL LAYOUT ===== */
+    .main-layout {
+      display: grid;
+      grid-template-columns: 260px 1fr 300px;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ===== LEFT SIDEBAR ===== */
+    .sidebar {
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .sidebar-section {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-section h4 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .form-group { margin-bottom: 12px; }
+    .form-group label {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 4px;
+      font-weight: 500;
+    }
+
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 7px 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-2);
+      color: var(--text);
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-group input:focus, .form-group select:focus {
+      border-color: var(--accent);
+    }
+
+    .profile-meter {
+      margin-top: 12px;
+      background: var(--bg-2);
+      border-radius: 999px;
+      height: 6px;
+      overflow: hidden;
+    }
+    .profile-meter-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      transition: width 0.4s ease;
+    }
+    .profile-meter-label {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 4px;
+      text-align: right;
+    }
+
+    .system-health { display: grid; gap: 6px; }
+    .health-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+    }
+    .health-row .label { color: var(--muted); }
+    .health-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 4px;
+    }
+    .health-dot.green { background: var(--success); box-shadow: 0 0 6px var(--success); }
+    .health-dot.yellow { background: var(--warning); }
+    .health-dot.red { background: var(--error); }
+
+    /* ===== CENTER CHAT ===== */
+    .chat-panel {
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-2);
+      overflow: hidden;
+    }
+
+    .chat-header {
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .chat-header-left { display: flex; align-items: center; gap: 10px; }
+    .chat-title { font-size: 14px; font-weight: 600; }
+
+    .mode-badge {
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .mode-info { background: var(--info-bg); color: var(--info); }
+    .mode-guidance { background: var(--warning-bg); color: var(--warning); }
+    .mode-action { background: var(--error-bg); color: var(--error); }
+
+    .messages {
+      flex: 1;
+      padding: 16px 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ===== USER MESSAGE ===== */
+    .msg-user {
+      align-self: flex-end;
+      max-width: 75%;
+      padding: 10px 14px;
+      background: rgba(106, 160, 255, 0.14);
+      border: 1px solid rgba(106, 160, 255, 0.35);
+      border-radius: var(--radius) var(--radius) 4px var(--radius);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .msg-user .msg-label {
+      font-size: 10px;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+
+    /* ===== ASSISTANT STRUCTURED RESPONSE ===== */
+    .msg-assistant {
+      max-width: 88%;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .response-card {
+      background: var(--card);
+      border: 1px solid var(--border-2);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      transition: border-color 0.3s, box-shadow 0.3s;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+    }
+    .response-card:hover {
+      border-color: rgba(106, 160, 255, 0.2);
+    }
+    .response-card.validated {
+      border-color: rgba(52, 211, 153, 0.35);
+      box-shadow: 0 4px 30px rgba(52, 211, 153, 0.08);
+    }
+
+    .response-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, rgba(17,24,39,0.8), rgba(22,30,53,0.6));
+    }
+    .response-card-header-left { display: flex; align-items: center; gap: 8px; }
+    .response-icon {
+      width: 32px; height: 32px;
+      border-radius: 10px;
+      display: grid; place-items: center;
+      font-size: 16px;
+    }
+    .response-icon.insurance { background: rgba(236, 72, 153, 0.15); }
+    .response-icon.tax { background: rgba(168, 85, 247, 0.15); }
+    .response-icon.investment { background: rgba(59, 130, 246, 0.15); }
+    .response-icon.loan { background: rgba(251, 146, 60, 0.15); }
+    .response-icon.retirement { background: rgba(52, 211, 153, 0.15); }
+    .response-icon.generic { background: rgba(106, 160, 255, 0.15); }
+
+    .response-agent-label { font-size: 13px; font-weight: 700; letter-spacing: 0.2px; }
+    .response-confidence {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    .conf-high { background: var(--success-bg); color: var(--success); }
+    .conf-medium { background: var(--warning-bg); color: var(--warning); }
+    .conf-low { background: var(--error-bg); color: var(--error); }
+
+    .response-body {
+      padding: 16px 20px;
+      font-size: 13.5px;
+      line-height: 1.75;
+      color: var(--text-2);
+    }
+    .response-body h1, .response-body h2 {
+      color: var(--text);
+      margin: 16px 0 8px;
+      font-size: 15px;
+      font-weight: 700;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px;
+    }
+    .response-body h3 {
+      color: var(--text);
+      margin: 14px 0 6px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .response-body h4 {
+      color: var(--accent);
+      margin: 10px 0 4px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .response-body ul, .response-body ol {
+      padding-left: 20px;
+      margin: 8px 0;
+    }
+    .response-body li {
+      margin-bottom: 6px;
+      padding-left: 2px;
+    }
+    .response-body li::marker { color: var(--accent); }
+    .response-body strong { color: var(--text); font-weight: 600; }
+    .response-body em { color: var(--accent-2); font-style: italic; }
+    .response-body p { margin-bottom: 10px; }
+    .response-body p:last-child { margin-bottom: 0; }
+    .response-body table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12px; }
+    .response-body th, .response-body td { padding: 8px 12px; border: 1px solid var(--border); text-align: left; }
+    .response-body th { background: var(--bg-2); color: var(--accent); font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
+    .response-body br + br { display: none; }
+
+    /* ===== EXPANDABLE SECTIONS ===== */
+    .expandable { border-top: 1px solid var(--border); }
+    .expandable-header {
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      transition: color 0.2s;
+      user-select: none;
+    }
+    .expandable-header:hover { color: var(--text); }
+    .expandable-header .arrow { transition: transform 0.2s; }
+    .expandable-header.open .arrow { transform: rotate(180deg); }
+    .expandable-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+    .expandable-content.open { max-height: 500px; }
+    .expandable-inner { padding: 0 16px 12px; }
+
+    .source-item {
+      padding: 8px 10px;
+      background: var(--bg-2);
+      border-radius: var(--radius-sm);
+      margin-bottom: 6px;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .source-item .source-name { color: var(--accent); font-weight: 600; }
+    .source-item .source-excerpt { color: var(--muted); margin-top: 3px; }
+
+    .disclaimer-text {
+      font-size: 11px;
+      color: var(--muted);
+      font-style: italic;
+      padding: 8px 10px;
+      background: var(--bg-2);
+      border-radius: var(--radius-sm);
+      border-left: 3px solid var(--warning);
+    }
+
+    /* ===== FOLLOW-UP BUTTONS ===== */
+    .follow-ups {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .follow-up-btn {
+      padding: 5px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border-2);
+      background: var(--card);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .follow-up-btn:hover {
+      background: var(--accent-glow);
+      border-color: var(--accent);
+    }
+
+    /* ===== WORKFLOW STEPS (inline) ===== */
+    .workflow-steps {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 16px;
+      border-top: 1px solid var(--border);
+      overflow-x: auto;
+      background: rgba(17, 24, 39, 0.4);
+    }
+    .wf-step {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 10px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .wf-step .wf-icon { font-size: 11px; }
+    .wf-step.passed .wf-icon { color: var(--success); }
+    .wf-step.blocked .wf-icon { color: var(--error); }
+    .wf-arrow { color: var(--border-2); font-size: 10px; margin: 0 2px; }
+
+    /* ===== COMPOSER ===== */
+    .composer {
+      border-top: 1px solid var(--border);
+      padding: 12px 16px;
+      background: var(--panel);
+    }
+    .composer-inner {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+    .composer textarea {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--bg-2);
+      color: var(--text);
+      font-size: 13px;
+      font-family: inherit;
+      resize: none;
+      outline: none;
+      min-height: 42px;
+      max-height: 120px;
+      transition: border-color 0.2s;
+    }
+    .composer textarea:focus { border-color: var(--accent); }
+    .composer textarea::placeholder { color: var(--muted); }
+
+    .send-btn {
+      padding: 10px 20px;
+      border-radius: var(--radius);
+      border: none;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: var(--bg);
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      transition: transform 0.15s, opacity 0.15s;
+      white-space: nowrap;
+    }
+    .send-btn:hover { transform: translateY(-1px); }
+    .send-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .composer-status {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ===== PROCESSING INDICATOR ===== */
+    .processing {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: var(--card);
+      border: 1px solid var(--border-2);
+      border-radius: var(--radius);
+      font-size: 12px;
+      color: var(--muted);
+      animation: fadeIn 0.3s ease;
+    }
+    .processing.active { display: flex; }
+    .processing-steps { display: flex; flex-direction: column; gap: 3px; }
+    .proc-step { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+    .proc-step.done { color: var(--success); }
+    .proc-step.active-step { color: var(--accent); }
+    .proc-step.waiting { color: var(--muted); opacity: 0.5; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      display: inline-block;
+      width: 12px; height: 12px;
+      border: 2px solid var(--border-2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .msg-user, .msg-assistant { animation: slideIn 0.3s ease; }
+
+    /* ===== RIGHT PANEL ===== */
+    .right-panel {
+      background: var(--panel);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .right-section {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .right-section h4 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .check-grid { display: grid; gap: 6px; }
+    .check-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 8px;
+      background: var(--bg-2);
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+    }
+    .check-row .check-name { color: var(--text-2); font-weight: 500; text-transform: capitalize; }
+    .check-status {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 999px;
+    }
+    .check-pass { background: var(--success-bg); color: var(--success); }
+    .check-warn { background: var(--warning-bg); color: var(--warning); }
+    .check-fail { background: var(--error-bg); color: var(--error); }
+
+    .conf-gauge {
+      position: relative;
+      width: 100%;
+      height: 8px;
+      background: var(--bg-2);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .conf-gauge-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width 0.6s ease, background 0.4s;
+    }
+    .conf-gauge-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .audit-list { display: grid; gap: 4px; }
+    .audit-item {
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .audit-item .audit-icon { font-size: 12px; }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--muted);
+      gap: 8px;
+      flex: 1;
+    }
+    .empty-state .empty-icon { font-size: 32px; opacity: 0.3; }
+    .empty-state p { font-size: 12px; }
+
+    .btn-ghost {
+      padding: 5px 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--text); }
+
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+    @media (max-width: 1100px) {
+      .main-layout { grid-template-columns: 220px 1fr 260px; }
+    }
+    @media (max-width: 900px) {
+      .main-layout { grid-template-columns: 1fr; }
+      .sidebar, .right-panel { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- ===== TOP BAR ===== -->
+    <div class="top-bar">
+      <div class="brand">
+        <div class="logo">F</div>
+        <div class="brand-text">
+          <div class="title">FinOrbit</div>
+          <div class="subtitle">Financial Planning OS</div>
+        </div>
+      </div>
+      <div class="top-bar-right">
+        <div class="status-pills">
+          <span class="pill pill-success" id="healthPill" style="display:none;"><span class="health-dot green"></span>Engine Active</span>
+          <span class="pill pill-info">🇮🇳 India</span>
+        </div>
+        <div class="mode-toggle">
+          <button id="modeConsumer" class="active" onclick="setViewMode('consumer')">Consumer</button>
+          <button id="modeAdvisor" onclick="setViewMode('advisor')">Advisor</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== THREE-PANEL LAYOUT ===== -->
+    <div class="main-layout">
+
+      <!-- LEFT SIDEBAR -->
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <h4>👤 Profile</h4>
+          <div class="form-group">
+            <label>Age</label>
+            <input type="number" id="profAge" placeholder="e.g., 34" min="18" max="100" />
+          </div>
+          <div class="form-group">
+            <label>Annual Income (₹)</label>
+            <input type="text" id="profIncome" placeholder="e.g., 18,00,000" />
+          </div>
+          <div class="form-group">
+            <label>Risk Tolerance</label>
+            <select id="profRisk">
+              <option value="">Select…</option>
+              <option value="conservative">Conservative</option>
+              <option value="moderate">Moderate</option>
+              <option value="aggressive">Aggressive</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Occupation</label>
+            <input type="text" id="profOccupation" placeholder="e.g., Software Engineer" />
+          </div>
+          <div class="form-group">
+            <label>Marital Status</label>
+            <select id="profMarital">
+              <option value="">Select…</option>
+              <option value="single">Single</option>
+              <option value="married">Married</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Dependents</label>
+            <input type="number" id="profDependents" placeholder="0" min="0" max="10" />
+          </div>
+          <div class="form-group">
+            <label>CIBIL Score</label>
+            <input type="number" id="profCibil" placeholder="e.g., 780" min="300" max="900" />
+          </div>
+          <div class="profile-meter">
+            <div class="profile-meter-fill" id="profileMeterFill" style="width: 0%"></div>
+          </div>
+          <div class="profile-meter-label" id="profileMeterLabel">Profile: 0%</div>
+        </div>
+
+        <div class="sidebar-section">
+          <h4>⚙️ Session</h4>
+          <div class="form-group">
+            <label>User ID</label>
+            <input id="userId" placeholder="user_001" />
+          </div>
+          <div class="form-group">
+            <label>Conversation ID</label>
+            <input id="conversationId" placeholder="conv_001" />
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <h4>🏥 System Health</h4>
+          <div class="system-health">
+            <div class="health-row">
+              <span class="label">Compliance Engine</span>
+              <span><span class="health-dot green"></span>Active</span>
+            </div>
+            <div class="health-row">
+              <span class="label">RAG Server</span>
+              <span><span class="health-dot yellow"></span>Standby</span>
+            </div>
+            <div class="health-row">
+              <span class="label">LLM Provider</span>
+              <span><span class="health-dot green"></span>OpenAI</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- CENTER CHAT -->
+      <section class="chat-panel">
+        <div class="chat-header">
+          <div class="chat-header-left">
+            <span class="chat-title">Advisor Console</span>
+            <span class="mode-badge mode-guidance" id="modeBadge">Guidance</span>
+          </div>
+          <button class="btn-ghost" id="clearChat">Clear</button>
+        </div>
+
+        <div class="messages" id="messages">
+          <div class="empty-state" id="emptyState">
+            <div class="empty-icon">💼</div>
+            <p><strong>Welcome to FinOrbit</strong></p>
+            <p>Ask about insurance, investments, taxes, loans, or retirement planning.</p>
+            <p style="font-size:11px; margin-top:8px;">Tip: Fill in your profile on the left for personalised advice.</p>
+          </div>
+        </div>
+
+        <div class="composer">
+          <div class="composer-inner">
+            <textarea id="queryInput" placeholder="Ask about loans, investments, insurance, or taxes…" rows="1"
+              oninput="this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
+            <button class="send-btn" id="sendBtn">Send</button>
+          </div>
+          <div class="composer-status">
+            <span id="requestStatus">Ready</span>
+            <span style="margin-left:auto; font-size:10px; color:var(--border-2);">⌘+Enter to send</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT PANEL -->
+      <aside class="right-panel" id="rightPanel">
+        <div class="right-section">
+          <h4>🛡️ Compliance Status</h4>
+          <div class="check-grid" id="complianceChecks">
+            <div class="check-row"><span class="check-name">Grounding</span><span class="check-status check-pass">✓</span></div>
+            <div class="check-row"><span class="check-name">Suitability</span><span class="check-status check-pass">✓</span></div>
+            <div class="check-row"><span class="check-name">Mis-selling</span><span class="check-status check-pass">✓</span></div>
+            <div class="check-row"><span class="check-name">Regulatory</span><span class="check-status check-pass">✓</span></div>
+            <div class="check-row"><span class="check-name">Tone</span><span class="check-status check-pass">✓</span></div>
+            <div class="check-row"><span class="check-name">PII</span><span class="check-status check-pass">✓</span></div>
+          </div>
+        </div>
+
+        <div class="right-section">
+          <h4>📊 Confidence</h4>
+          <div class="conf-gauge"><div class="conf-gauge-fill" id="confGaugeFill" style="width:0%; background:var(--muted);"></div></div>
+          <div class="conf-gauge-label"><span id="confLabel">—</span><span id="confAction">—</span></div>
+        </div>
+
+        <div class="right-section" id="sourcesSection" style="display:none;">
+          <h4>📚 Sources <span id="sourceCount" style="font-size:10px;color:var(--accent);"></span></h4>
+          <div id="sourcesList"></div>
+        </div>
+
+        <div class="right-section">
+          <h4>🔍 Audit Trace</h4>
+          <div class="audit-list" id="auditTrace">
+            <div class="audit-item"><span class="audit-icon">⏳</span>Awaiting query…</div>
+          </div>
+        </div>
+
+        <div class="right-section advisor-only" style="display:none;">
+          <h4>🧪 Debug Info</h4>
+          <pre id="debugJson" style="font-size:10px; color:var(--muted); white-space:pre-wrap; word-break:break-all; max-height:200px; overflow-y:auto;"></pre>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    // ===== STATE =====
+    let viewMode = 'consumer';
+    let lastResponseData = null;
+
+    // ===== DOM REFS =====
+    const $ = id => document.getElementById(id);
+    const messages = $('messages');
+    const queryInput = $('queryInput');
+    const sendBtn = $('sendBtn');
+    const requestStatus = $('requestStatus');
+
+    // ===== PROFILE =====
+    const profileFields = ['profAge','profIncome','profRisk','profOccupation','profMarital','profDependents','profCibil'];
+
+    function getProfileHint() {
+      const parts = [];
+      const age = $('profAge').value;
+      const income = $('profIncome').value;
+      const risk = $('profRisk').value;
+      const occ = $('profOccupation').value;
+      const marital = $('profMarital').value;
+      const deps = $('profDependents').value;
+      const cibil = $('profCibil').value;
+      if (age) parts.push('I am ' + age + ' years old');
+      if (income) parts.push('earning ' + income + ' per annum');
+      if (occ) parts.push('as a ' + occ);
+      if (cibil) parts.push('I have a CIBIL score of ' + cibil);
+      if (marital) parts.push('I am ' + marital);
+      if (deps) parts.push('with ' + deps + ' dependent(s)');
+      if (risk) parts.push('My risk tolerance is ' + risk);
+      return parts.join('. ') + (parts.length ? '.' : '');
+    }
+
+    function updateProfileMeter() {
+      let filled = 0;
+      profileFields.forEach(function(id) { if ($(id).value) filled++; });
+      const pct = Math.round((filled / profileFields.length) * 100);
+      $('profileMeterFill').style.width = pct + '%';
+      $('profileMeterLabel').textContent = 'Profile: ' + pct + '%';
+      profileFields.forEach(function(id) { localStorage.setItem('fo.' + id, $(id).value); });
+      localStorage.setItem('fo.userId', $('userId').value);
+      localStorage.setItem('fo.conversationId', $('conversationId').value);
+    }
+
+    function loadProfile() {
+      profileFields.forEach(function(id) { $(id).value = localStorage.getItem('fo.' + id) || ''; });
+      $('userId').value = localStorage.getItem('fo.userId') || ('user_' + Math.floor(Math.random() * 1000));
+      $('conversationId').value = localStorage.getItem('fo.conversationId') || ('conv_' + Math.floor(Math.random() * 1000));
+      updateProfileMeter();
+    }
+
+    profileFields.forEach(function(id) { $(id).addEventListener('input', updateProfileMeter); });
+
+    // ===== VIEW MODE =====
+    function setViewMode(mode) {
+      viewMode = mode;
+      $('modeConsumer').classList.toggle('active', mode === 'consumer');
+      $('modeAdvisor').classList.toggle('active', mode === 'advisor');
+      document.querySelectorAll('.advisor-only').forEach(function(el) {
+        el.style.display = mode === 'advisor' ? 'block' : 'none';
+      });
+    }
+
+    // ===== MARKDOWN RENDERER =====
+    function renderMarkdown(text) {
+      if (!text) return '';
+      // Escape HTML
+      text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      // Process line by line for proper list/heading handling
+      var lines = text.split('\n');
+      var result = [];
+      var inUl = false, inOl = false;
+
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+
+        // Headings
+        if (/^####\s+(.+)$/.test(line)) { closeLists(); result.push('<h4>' + RegExp.$1 + '</h4>'); continue; }
+        if (/^###\s+(.+)$/.test(line)) { closeLists(); result.push('<h3>' + RegExp.$1 + '</h3>'); continue; }
+        if (/^##\s+(.+)$/.test(line)) { closeLists(); result.push('<h2>' + RegExp.$1 + '</h2>'); continue; }
+        if (/^#\s+(.+)$/.test(line)) { closeLists(); result.push('<h1>' + RegExp.$1 + '</h1>'); continue; }
+
+        // Unordered list
+        var ulMatch = line.match(/^\s*[•\-\*]\s+(.+)$/);
+        if (ulMatch) {
+          if (inOl) { result.push('</ol>'); inOl = false; }
+          if (!inUl) { result.push('<ul>'); inUl = true; }
+          result.push('<li>' + inlineFmt(ulMatch[1]) + '</li>');
+          continue;
+        }
+
+        // Ordered list
+        var olMatch = line.match(/^\s*\d+[\.\)]\s+(.+)$/);
+        if (olMatch) {
+          if (inUl) { result.push('</ul>'); inUl = false; }
+          if (!inOl) { result.push('<ol>'); inOl = true; }
+          result.push('<li>' + inlineFmt(olMatch[1]) + '</li>');
+          continue;
+        }
+
+        // Empty line
+        if (line.trim() === '') { closeLists(); result.push('<br/>'); continue; }
+
+        // Normal paragraph text
+        closeLists();
+        result.push('<p>' + inlineFmt(line) + '</p>');
+      }
+      closeLists();
+      return result.join('');
+
+      function closeLists() {
+        if (inUl) { result.push('</ul>'); inUl = false; }
+        if (inOl) { result.push('</ol>'); inOl = false; }
+      }
+      function inlineFmt(s) {
+        return s
+          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\*(.+?)\*/g, '<em>$1</em>')
+          .replace(/`(.+?)`/g, '<code style="background:var(--bg-2);padding:1px 5px;border-radius:4px;font-size:12px;">$1</code>');
+      }
+    }
+
+    // ===== AGENT ICON MAP =====
+    function getAgentMeta(agents) {
+      var map = {
+        'insurance_analyzer': { icon: '🏥', label: 'Insurance Analysis', cls: 'insurance' },
+        'tax_planner': { icon: '🧾', label: 'Tax Planning', cls: 'tax' },
+        'investment_coach': { icon: '📈', label: 'Investment Guidance', cls: 'investment' },
+        'credits_loans': { icon: '🏦', label: 'Credit & Loans', cls: 'loan' },
+        'retirement_planner': { icon: '🏖️', label: 'Retirement Planning', cls: 'retirement' },
+        'fin_score': { icon: '💼', label: 'Financial Advisory', cls: 'generic' },
+      };
+      var primary = (agents || [])[0] || 'fin_score';
+      return map[primary] || { icon: '💬', label: 'FinOrbit', cls: 'generic' };
+    }
+
+    // ===== ADD USER MESSAGE =====
+    function addUserMessage(text) {
+      var es = $('emptyState');
+      if (es) es.remove();
+      var div = document.createElement('div');
+      div.className = 'msg-user';
+      div.innerHTML = '<div class="msg-label">You</div><div>' + text + '</div>';
+      messages.appendChild(div);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    // ===== ADD STRUCTURED RESPONSE =====
+    function addAssistantMessage(data) {
+      var es = $('emptyState');
+      if (es) es.remove();
+      var agentMeta = getAgentMeta(data.agents);
+      var confScore = data.confidence_score || 0;
+      var confPct = Math.round(confScore * 100);
+      var confClass = confPct >= 75 ? 'conf-high' : confPct >= 50 ? 'conf-medium' : 'conf-low';
+      var validated = confPct >= 70;
+
+      var wrapper = document.createElement('div');
+      wrapper.className = 'msg-assistant';
+
+      var cardHTML = '<div class="response-card ' + (validated ? 'validated' : '') + '">' +
+        '<div class="response-card-header">' +
+          '<div class="response-card-header-left">' +
+            '<div class="response-icon ' + agentMeta.cls + '">' + agentMeta.icon + '</div>' +
+            '<div><span class="response-agent-label">' + agentMeta.label + '</span>' +
+            (data.recommended_action ? '<div style="font-size:10px;color:var(--muted);margin-top:2px;">Action: ' + data.recommended_action + '</div>' : '') +
+            '</div>' +
+          '</div>' +
+          '<span class="response-confidence ' + confClass + '">' + confPct + '% confidence</span>' +
+        '</div>' +
+        '<div class="response-body">' + renderMarkdown(data.response) + '</div>';
+
+      // Workflow steps
+      if (data.pipeline_steps && data.pipeline_steps.length > 0) {
+        cardHTML += '<div class="workflow-steps">';
+        data.pipeline_steps.forEach(function(step, i) {
+          var icon = (step.status === 'passed' || step.status === 'ok' || step.status === 'approve') ? '✓' : step.status === 'blocked' ? '✗' : '●';
+          var cls = (step.status === 'passed' || step.status === 'ok' || step.status === 'approve') ? 'passed' : step.status === 'blocked' ? 'blocked' : 'passed';
+          if (i > 0) cardHTML += '<span class="wf-arrow">→</span>';
+          cardHTML += '<span class="wf-step ' + cls + '"><span class="wf-icon">' + icon + '</span>' + step.step + '</span>';
+        });
+        cardHTML += '</div>';
+      }
+
+      // Sources expandable
+      if (data.sources && data.sources.length > 0) {
+        cardHTML += '<div class="expandable">' +
+          '<div class="expandable-header" onclick="this.classList.toggle(\'open\'); this.nextElementSibling.classList.toggle(\'open\');">' +
+            '<span>📚 Sources (' + data.sources.length + ')</span>' +
+            '<span class="arrow">▼</span>' +
+          '</div>' +
+          '<div class="expandable-content"><div class="expandable-inner">';
+        data.sources.forEach(function(s) {
+          cardHTML += '<div class="source-item"><div class="source-name">' + (s.document || 'Document') + '</div>' +
+            (s.excerpt ? '<div class="source-excerpt">' + s.excerpt + '</div>' : '') + '</div>';
+        });
+        cardHTML += '</div></div></div>';
+      }
+
+      // Disclaimer
+      cardHTML += '<div class="expandable">' +
+        '<div class="expandable-header" onclick="this.classList.toggle(\'open\'); this.nextElementSibling.classList.toggle(\'open\');">' +
+          '<span>⚠️ Disclaimer</span><span class="arrow">▼</span>' +
+        '</div>' +
+        '<div class="expandable-content"><div class="expandable-inner">' +
+          '<div class="disclaimer-text">This is general information for educational purposes. Not personalised financial advice. Consult a SEBI/IRDAI-registered advisor before making decisions.</div>' +
+        '</div></div></div>';
+
+      cardHTML += '</div>'; // close response-card
+
+      // Follow-up buttons
+      if (data.follow_ups && data.follow_ups.length > 0) {
+        cardHTML += '<div class="follow-ups">';
+        data.follow_ups.forEach(function(f) {
+          cardHTML += '<button class="follow-up-btn" onclick="handleFollowUp(this.textContent)">' + f + '</button>';
+        });
+        cardHTML += '</div>';
+      }
+
+      wrapper.innerHTML = cardHTML;
+      messages.appendChild(wrapper);
+      messages.scrollTop = messages.scrollHeight;
+
+      updateRightPanel(data);
+    }
+
+    // ===== UPDATE RIGHT PANEL =====
+    function updateRightPanel(data) {
+      lastResponseData = data;
+
+      // Compliance checks
+      var checksGrid = $('complianceChecks');
+      if (data.validation_checks && data.validation_checks.length > 0) {
+        checksGrid.innerHTML = data.validation_checks.map(function(vc) {
+          var statusCls = vc.passed ? 'check-pass' : vc.severity === 'WARNING' ? 'check-warn' : 'check-fail';
+          var icon = vc.passed ? '✓' : vc.severity === 'WARNING' ? '⚠' : '✗';
+          return '<div class="check-row"><span class="check-name">' + vc.check + '</span><span class="check-status ' + statusCls + '">' + icon + '</span></div>';
+        }).join('');
+      }
+
+      // Confidence gauge
+      var score = data.confidence_score || 0;
+      var pct = Math.round(score * 100);
+      var color = pct >= 75 ? 'var(--success)' : pct >= 50 ? 'var(--warning)' : 'var(--error)';
+      $('confGaugeFill').style.width = pct + '%';
+      $('confGaugeFill').style.background = color;
+      $('confLabel').textContent = pct + '%';
+      $('confAction').textContent = data.recommended_action || '—';
+
+      // Sources
+      if (data.sources && data.sources.length > 0) {
+        $('sourcesSection').style.display = 'block';
+        $('sourceCount').textContent = '(' + data.sources.length + ')';
+        $('sourcesList').innerHTML = data.sources.map(function(s) {
+          return '<div class="source-item"><div class="source-name">' + (s.document || 'Document') + '</div>' +
+            (s.excerpt ? '<div class="source-excerpt">' + s.excerpt + '</div>' : '') + '</div>';
+        }).join('');
+      } else {
+        $('sourcesSection').style.display = 'none';
+      }
+
+      // Audit trace
+      var auditHTML = [];
+      if (data.agents) auditHTML.push('<div class="audit-item"><span class="audit-icon">🤖</span>Agents: ' + data.agents.join(', ') + '</div>');
+      if (data.mode) auditHTML.push('<div class="audit-item"><span class="audit-icon">🏷️</span>Mode: ' + data.mode + '</div>');
+      if (data.compliance_status) auditHTML.push('<div class="audit-item"><span class="audit-icon">🛡️</span>Compliance: ' + data.compliance_status + '</div>');
+      if (data.recommended_action) auditHTML.push('<div class="audit-item"><span class="audit-icon">📋</span>Action: ' + data.recommended_action + '</div>');
+      if (data.confidence_score !== undefined && data.confidence_score !== null) auditHTML.push('<div class="audit-item"><span class="audit-icon">📊</span>Confidence: ' + Math.round(data.confidence_score * 100) + '%</div>');
+      $('auditTrace').innerHTML = auditHTML.join('');
+
+      // Mode badge
+      var badge = $('modeBadge');
+      var mode = data.mode || 'guidance';
+      badge.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+      badge.className = 'mode-badge mode-' + mode;
+
+      // Debug JSON
+      $('debugJson').textContent = JSON.stringify(data, null, 2);
+    }
+
+    // ===== FOLLOW-UP =====
+    function handleFollowUp(text) {
+      queryInput.value = text;
+      sendQuery();
+    }
+
+    // ===== PROCESSING ANIMATION =====
+    function showProcessing() {
+      var es = $('emptyState');
+      if (es) es.remove();
+      var div = document.createElement('div');
+      div.className = 'processing active';
+      div.id = 'processingIndicator';
+      div.innerHTML = '<div class="processing-steps">' +
+        '<div class="proc-step done">✓ Guardrails checked</div>' +
+        '<div class="proc-step active-step"><span class="spinner"></span> Routing to specialist…</div>' +
+        '<div class="proc-step waiting">○ Retrieving evidence</div>' +
+        '<div class="proc-step waiting">○ Validating compliance</div>' +
+        '<div class="proc-step waiting">○ Calculating confidence</div>' +
+      '</div>';
+      messages.appendChild(div);
+      messages.scrollTop = messages.scrollHeight;
+
+      var steps = div.querySelectorAll('.proc-step');
+      var idx = 1;
+      var interval = setInterval(function() {
+        if (idx >= steps.length) { clearInterval(interval); return; }
+        steps[idx].classList.remove('active-step');
+        steps[idx].classList.add('done');
+        steps[idx].innerHTML = '✓ ' + steps[idx].textContent.replace(/^[○✓]\s*/, '').replace('…', '');
+        idx++;
+        if (idx < steps.length) {
+          steps[idx].classList.remove('waiting');
+          steps[idx].classList.add('active-step');
+          var txt = steps[idx].textContent.replace(/^○\s*/, '');
+          steps[idx].innerHTML = '<span class="spinner"></span> ' + txt;
+        }
+      }, 800);
+
+      return { element: div, interval: interval };
+    }
+
+    // ===== HEALTH CHECK =====
+    async function checkHealth() {
+      try {
+        var res = await fetch('/health');
+        if (!res.ok) throw new Error();
+        $('healthPill').style.display = 'flex';
+      } catch (e) {
+        $('healthPill').style.display = 'none';
+      }
+    }
+
+    // ===== SEND QUERY =====
+    async function sendQuery() {
+      var query = queryInput.value.trim();
+      if (!query) return;
+
+      updateProfileMeter();
+      var profileHint = getProfileHint();
+
+      addUserMessage(query);
+      queryInput.value = '';
+      queryInput.style.height = 'auto';
+      requestStatus.textContent = 'Processing…';
+      sendBtn.disabled = true;
+
+      var proc = showProcessing();
+
+      try {
+        var payload = {
+          userId: $('userId').value.trim(),
+          conversationId: $('conversationId').value.trim(),
+          query: query
+        };
+        if (profileHint) payload.profileHint = profileHint;
+
+        var response = await fetch('/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        var data = await response.json();
+        clearInterval(proc.interval);
+        proc.element.remove();
+
+        if (!response.ok) {
+          var errMsg = (data && data.detail && data.detail.error) || (data && data.detail) || 'Request failed';
+          addAssistantMessage({
+            response: '⚠️ ' + errMsg,
+            confidence_score: 0,
+            agents: [],
+            recommended_action: 'error',
+            mode: 'action',
+          });
+        } else {
+          addAssistantMessage(data);
+        }
+      } catch (err) {
+        clearInterval(proc.interval);
+        proc.element.remove();
+        addAssistantMessage({
+          response: '⚠️ Network error. Check server logs.',
+          confidence_score: 0,
+          agents: [],
+          mode: 'action',
+        });
+      } finally {
+        requestStatus.textContent = 'Ready';
+        sendBtn.disabled = false;
+      }
+    }
+
+    // ===== EVENT LISTENERS =====
+    sendBtn.addEventListener('click', sendQuery);
+    queryInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) sendQuery();
+    });
+    $('clearChat').addEventListener('click', function() {
+      messages.innerHTML = '<div class="empty-state" id="emptyState">' +
+        '<div class="empty-icon">💼</div>' +
+        '<p><strong>Welcome to FinOrbit</strong></p>' +
+        '<p>Ask about insurance, investments, taxes, loans, or retirement planning.</p>' +
+      '</div>';
+    });
+
+    // ===== INIT =====
+    loadProfile();
+    checkHealth();
+  </script>
+</body>
+</html>

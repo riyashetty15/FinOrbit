@@ -1,0 +1,13 @@
+template_policy:
+  default_style: simple
+  module_styles:
+    TAX: simple
+    RETIREMENT: simple
+    CREDIT: simple
+    SIP_INVESTMENT: simple
+    INSURANCE: simple
+    FRAUD: simple
+
+section_builder:
+  max_bullets: 5
+  cta_line: "Want a more accurate answer? Share your goal + timeframe and I’ll tailor this."

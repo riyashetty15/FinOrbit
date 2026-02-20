@@ -1,0 +1,22 @@
+force_disclaimer: true
+default_disclaimer: "Note: This is general information, not personalized financial advice."
+
+banned_phrases:
+  - "guaranteed"
+  - "always"
+  - "never"
+
+replacements:
+  guaranteed: "not guaranteed"
+  always: "generally"
+  never: "rarely"
+
+emoji:
+  enabled: true
+  module_prefix:
+    TAX: "🧾"
+    RETIREMENT: "🏖️"
+    CREDIT: "💳"
+    SIP_INVESTMENT: "📈"
+    INSURANCE: "🛡️"
+    FRAUD: "🚨"
