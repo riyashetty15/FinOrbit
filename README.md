@@ -544,20 +544,17 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **LlamaIndex** - RAG framework
 - **FastAPI** - API framework
 - **PostgreSQL + pgvector** - Vector database
-- **Google Gemini** - LLM provider
+- **OpenAI/Gemini** - LLM provider
 - **LangGraph** - Agent workflow orchestration
 
 ---
 
 ## Contact
 
-For questions, issues, or collaboration:
+For questions, issues, or collaboration, feel free to connect with me here or on Linkedin
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/FinOrbit/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/FinOrbit/discussions)
+- **[LinkedIn](https://www.linkedin.com/in/riyashetty1598/)**
+
+Also read more on [Medium](https://riyashetty1598.medium.com/)
 
 ---
-
-**Built for production-grade financial intelligence**
-
-*Last Updated: February 17, 2026*
