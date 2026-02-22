@@ -3,7 +3,7 @@
 # Description: Unified validation pipeline replacing LangGraph orchestrator
 # ==============================================
 
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 import logging
 from datetime import datetime
 
@@ -21,6 +21,12 @@ from backend.agents.validation.grounding_check import GroundingCheckAgent
 from backend.agents.validation.regulatory_consistency import RegulatoryConsistencyAgent
 from backend.agents.validation.suitability_check import SuitabilityCheckAgent
 from backend.agents.validation.tone_clarity import ToneClarityAgent
+
+# Optional: compliance engine for input guardrails
+try:
+    from backend.core.compliance_engine import ComplianceEngineService
+except Exception:
+    ComplianceEngineService = None
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +56,15 @@ class ValidationPipeline:
         self.missell_guard = MisSellingGuardAgent()
         self.audit_logger = AuditLoggerAgent()
 
+        # Compliance engine for input guardrails
+        self.compliance_engine = None
+        if ComplianceEngineService:
+            try:
+                self.compliance_engine = ComplianceEngineService()
+                logger.info("[OK] Compliance engine integrated into pre-validation")
+            except Exception as e:
+                logger.warning(f"[WARN] Failed to initialize compliance engine: {e}")
+
         # Validation agents (post-validation)
         self.grounding_check = GroundingCheckAgent()
         self.regulatory_check = RegulatoryConsistencyAgent()
@@ -59,7 +74,7 @@ class ValidationPipeline:
         # Confidence scorer
         self.confidence_scorer = ConfidenceScorer()
 
-        logger.info("[OK] ValidationPipeline initialized with 9 agents")
+        logger.info("[OK] ValidationPipeline initialized with 9 agents + compliance engine")
 
     def run_pre_validation(
         self,
@@ -179,6 +194,44 @@ class ValidationPipeline:
         # 5. Audit Logger (NON-BLOCKING)
         logger.info("📝 Logging query to audit trail")
         audit_safe, audit_issues, audit_meta = self.audit_logger.check(query, profile)
+
+        # 6. Compliance Engine Input Guardrails (BLOCKING)
+        if self.compliance_engine:
+            logger.info("🔍 Running compliance engine input guardrails")
+            try:
+                # Run compliance check on input query
+                # compliance_check expects (answer_text, context) where answer_text will be checked
+                # against rules, and context['user_query'] is also checked for rule violations
+                compliance_context = {
+                    "user_query": query,
+                    "module": "GENERIC",  # Pre-validation doesn't know target module yet
+                    "language": "en",
+                    "channel": "ALL"
+                }
+                # Pass empty answer for input checking - rules will match against user_query in context
+                compliance_result = self.compliance_engine.compliance_check("", compliance_context)
+                
+                # Check if compliance blocked the query
+                if compliance_result.status in ["BLOCKED", "FORCE_SAFE_ANSWER"]:
+                    blocking_issues.append(compliance_result.final_answer)
+                    
+                    # Log audit entry
+                    audit_entries.append(AuditEntry(
+                        timestamp=datetime.utcnow().isoformat(),
+                        event_type="compliance_block",
+                        agent_name="compliance_engine",
+                        details={
+                            "status": compliance_result.status,
+                            "message": compliance_result.final_answer,
+                            "matched_rules": compliance_result.triggered_rule_ids
+                        },
+                        severity=Severity.CRITICAL,
+                        action_taken="blocked"
+                    ))
+                    
+                    logger.error(f"[ERROR] Compliance engine blocked query: {compliance_result.final_answer}")
+            except Exception as e:
+                logger.warning(f"[WARN] Compliance engine check failed: {e}")
 
         # Determine if execution should be blocked
         should_block = len(blocking_issues) > 0

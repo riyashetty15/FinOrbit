@@ -1,5 +1,33 @@
 [
   {
+    "id": 29,
+    "regulator": "SEBI",
+    "module": "GENERIC",
+    "pattern_type": "REGEX",
+    "pattern": "\\b(?:want|need|looking for|seeking|give me|get)\\b.*?\\b(?:guaranteed?|sure-?shot|fixed|100%|certain)\\b.*?\\b(?:\\d+%?)?\\s*(?:returns?|profit|income|gains?)\\b",
+    "rule_type": "BLOCK",
+    "replace_pattern": null,
+    "message": "I cannot assist with requests for guaranteed returns. All investments carry market risk, and no legitimate investment can guarantee specific returns. Would you like to learn about realistic return expectations and risk management strategies instead?",
+    "severity": "HIGH",
+    "priority": 1000,
+    "language": "ALL",
+    "channel": "ALL"
+  },
+  {
+    "id": 30,
+    "regulator": "RBI",
+    "module": "GENERIC",
+    "pattern_type": "REGEX",
+    "pattern": "\\b(?:approve|sanction|get me|give me)\\b.*?\\b(?:loan|credit)\\b",
+    "rule_type": "BLOCK",
+    "replace_pattern": null,
+    "message": "I cannot approve loan applications or make lending decisions. I'm an informational assistant. For loan applications, please contact lenders directly through official channels.",
+    "severity": "HIGH",
+    "priority": 1000,
+    "language": "ALL",
+    "channel": "ALL"
+  },
+  {
     "id": 28,
     "regulator": "SEBI",
     "module": "ADVISORY",

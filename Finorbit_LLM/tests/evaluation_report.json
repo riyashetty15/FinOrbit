@@ -4,30 +4,30 @@
     "rag_recall": 0,
     "rag_hit_rate": 0.0,
     "rag_avg_similarity": 0,
-    "routing_accuracy": 0.0,
+    "routing_accuracy": 0.6,
     "rag_decision_accuracy": 0.5,
     "citation_precision": 0.0,
     "citation_recall": 0.0,
     "compliance_pass_rate": 0.25,
     "grounding_accuracy": 0.3333333333333333,
-    "avg_latency_ms": 2463.7003540992737,
-    "p95_latency_ms": 9212.543964385986,
-    "p99_latency_ms": 10999.314785003662,
+    "avg_latency_ms": 2628.7536521752677,
+    "p95_latency_ms": 9235.261797904968,
+    "p99_latency_ms": 9589.954733848572,
     "evidence_coverage_accuracy": 0.3333333333333333,
-    "total_tests": 18,
-    "passed_tests": 5,
-    "failed_tests": 13
+    "total_tests": 16,
+    "passed_tests": 7,
+    "failed_tests": 9
   },
   "detailed_results": [
     {
       "test_id": "agent_001",
       "category": "agent_response",
-      "passed": false,
-      "routed_correctly": false,
+      "passed": true,
+      "routed_correctly": true,
       "citation_check": true,
       "no_prohibited": true,
       "has_topics": true,
-      "latency_ms": 1220.6611633300781
+      "latency_ms": 17.511844635009766
     },
     {
       "test_id": "agent_002",
@@ -37,17 +37,17 @@
       "citation_check": false,
       "no_prohibited": true,
       "has_topics": false,
-      "latency_ms": 688.417911529541
+      "latency_ms": 757.4708461761475
     },
     {
       "test_id": "agent_003",
       "category": "agent_response",
-      "passed": false,
-      "routed_correctly": false,
+      "passed": true,
+      "routed_correctly": true,
       "citation_check": true,
       "no_prohibited": true,
       "has_topics": true,
-      "latency_ms": 976.4039516448975
+      "latency_ms": 1369.9047565460205
     },
     {
       "test_id": "agent_004",
@@ -57,17 +57,17 @@
       "citation_check": true,
       "no_prohibited": true,
       "has_topics": false,
-      "latency_ms": 5288.36989402771
+      "latency_ms": 9323.93503189087
     },
     {
       "test_id": "agent_005",
       "category": "agent_response",
       "passed": false,
-      "routed_correctly": false,
+      "routed_correctly": true,
       "citation_check": true,
       "no_prohibited": true,
       "has_topics": false,
-      "latency_ms": 9659.236669540405
+      "latency_ms": 8969.242095947266
     },
     {
       "test_id": "evidence_001",
@@ -75,7 +75,7 @@
       "passed": false,
       "coverage": "insufficient",
       "citations_count": 0,
-      "latency_ms": 4434.545278549194
+      "latency_ms": 7535.724878311157
     },
     {
       "test_id": "evidence_002",
@@ -83,7 +83,7 @@
       "passed": true,
       "coverage": "insufficient",
       "citations_count": 0,
-      "latency_ms": 5.918979644775391
+      "latency_ms": 1531.4829349517822
     },
     {
       "test_id": "evidence_003",
@@ -91,77 +91,63 @@
       "passed": false,
       "coverage": "insufficient",
       "citations_count": 0,
-      "latency_ms": 371.08469009399414
-    },
-    {
-      "test_id": "compliance_001",
-      "category": "compliance",
-      "passed": false,
-      "reason": "mis-selling - guaranteed returns",
-      "latency_ms": 4445.151090621948
-    },
-    {
-      "test_id": "compliance_002",
-      "category": "compliance",
-      "passed": false,
-      "reason": "outside scope - cannot make decisions",
-      "latency_ms": 1106.8601608276367
+      "latency_ms": 1427.4590015411377
     },
     {
       "test_id": "compliance_004",
       "category": "compliance",
       "passed": true,
       "reason": "valid query",
-      "latency_ms": 5245.513200759888
+      "latency_ms": 5110.7611656188965
     },
     {
       "test_id": "routing_001",
       "category": "routing",
       "passed": true,
       "rag_used": false,
-      "latency_ms": 7872.4658489227295
+      "latency_ms": 7402.045965194702
     },
     {
       "test_id": "routing_002",
       "category": "routing",
       "passed": false,
       "rag_used": false,
-      "latency_ms": 2304.248094558716
+      "latency_ms": 2196.9220638275146
     },
     {
       "test_id": "routing_003",
       "category": "routing",
       "passed": true,
       "rag_used": false,
-      "latency_ms": 993.8030242919922
+      "latency_ms": 1116.476058959961
     },
     {
       "test_id": "routing_004",
       "category": "routing",
       "passed": false,
       "rag_used": false,
-      "latency_ms": 396.61598205566406
+      "latency_ms": 678.8022518157959
     },
     {
       "test_id": "grounding_001",
       "category": "grounding",
       "passed": false,
       "citations_count": 0,
-      "latency_ms": 5956.240177154541
+      "latency_ms": 7345.301866531372
     },
     {
       "test_id": "grounding_002",
       "category": "grounding",
       "passed": true,
       "citations_count": 0,
-      "latency_ms": 6257.291078567505
+      "latency_ms": 6358.661890029907
     },
     {
       "test_id": "grounding_003",
       "category": "grounding",
       "passed": false,
       "citations_count": 0,
-      "latency_ms": 1823.5080242156982
+      "latency_ms": 1896.7669010162354
     }
   ],
   "recommendations": [

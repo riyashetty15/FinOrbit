@@ -4,6 +4,9 @@
 
 FinOrbit is an intelligent financial advisory system that combines specialized AI agents with a production-grade Retrieval-Augmented Generation (RAG) system to deliver accurate, compliant, and contextual financial guidance across credit, investment, insurance, taxation, and retirement planning.
 
+<!-- TODO: Add hero image or demo GIF showing the chat interface -->
+<!-- ![FinOrbit Demo](docs/images/finorbit-demo.gif) -->
+
 ---
 
 ## Key Features
@@ -33,6 +36,9 @@ FinOrbit is an intelligent financial advisory system that combines specialized A
 ---
 
 ## Architecture
+
+<!-- TODO: Add architecture diagram image -->
+<!-- ![System Architecture](docs/images/architecture-diagram.png) -->
 
 ```
 ┌─────────────┐
@@ -202,6 +208,12 @@ python3 -m backend.server
 ```
 
 ### 7. Access the UI
+<!-- TODO: Add screenshot of the chat interface -->
+<!-- ![Chat Interface](docs/images/chat-interface.png) -->
+
+
+<!-- TODO: Add usage demonstration screenshots or GIFs -->
+<!-- ![Query Example](docs/images/query-example.png) -->
 
 Open your browser: **http://localhost:8000/ui**
 
@@ -304,6 +316,9 @@ FinOrbit/
 │
 ├── docs/                     # Documentation
 └── README.md                 # This file
+<!-- TODO: Add diagram showing RAG flow with evidence contracts -->
+<!-- ![RAG Evidence Flow](docs/images/rag-evidence-flow.png) -->
+
 ```
 
 ---
@@ -364,6 +379,9 @@ filters = {
     "year_min": 2023,        # GTE operator
     "issuer": "RBI",
     "jurisdiction": "IN",
+<!-- TODO: Add guardrails pipeline visualization -->
+<!-- ![Guardrails Pipeline](docs/images/guardrails-pipeline.png) -->
+
     "is_current": True,
     "doc_type": "regulation"
 }
@@ -472,6 +490,9 @@ pip install -e .
 ```bash
 # Check PostgreSQL status
 lsof -i :5432
+
+<!-- TODO: Add monitoring dashboard screenshot -->
+<!-- ![Monitoring Dashboard](docs/images/monitoring-dashboard.png) -->
 
 # Restart Docker container
 cd Finorbit_RAG

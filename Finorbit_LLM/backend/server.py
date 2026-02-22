@@ -1016,6 +1016,7 @@ async def process_query(request: QueryRequest):
                 confidence_score=confidence.overall_score,
                 needs_clarification=needs_clarification,
                 agents=agents_used,
+                agent_type=agents_used[0] if agents_used else None,  # Backward compatibility
                 recommended_action=confidence.recommended_action,
                 compliance_status=compliance_status,
                 validation_checks=validation_checks_summary,

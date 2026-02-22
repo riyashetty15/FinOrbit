@@ -46,7 +46,7 @@
     {
       "id": "agent_001",
       "query": "What are the eligibility criteria for personal loans?",
-      "expected_agent": "credit_loans",
+      "expected_agent": "credits_loans",
       "should_have_citations": false,
       "must_avoid_keywords": ["guarantee", "assured"],
       "expected_topics": ["credit score", "income", "eligibility"]
@@ -138,13 +138,13 @@
     {
       "id": "routing_001",
       "query": "How do I improve my CIBIL score?",
-      "expected_module": "credit_loans",
+      "expected_module": "credits_loans",
       "should_use_rag": false
     },
     {
       "id": "routing_002",
       "query": "What are RBI guidelines for credit score reporting?",
-      "expected_module": "credit_loans",
+      "expected_module": "credits_loans",
       "should_use_rag": true
     },
     {

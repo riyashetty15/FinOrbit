@@ -85,6 +85,10 @@ class QueryResponse(BaseModel):
         default=[],
         description="List of all specialist agents used to process the query"
     )
+    agent_type: Optional[str] = Field(
+        default=None,
+        description="Primary agent used (backward compatibility - use agents[0] if available)"
+    )
 
     # --- Extended metadata for UI ---
     recommended_action: Optional[str] = Field(

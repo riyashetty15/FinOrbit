@@ -151,7 +151,7 @@ INTENT_MAP = {
     r"\b(invest|portfolio|mutual fund|stocks?)\b": "investment_coach",
     # Avoid matching generic 'coverage' (e.g., 'Liquidity Coverage Ratio'); require explicit insurance-related wording.
     r"\b(insurance|premium|term plan)\b|\binsurance coverage\b|\bcoverage amount\b": "insurance_analyzer",
-    r"\b(retire|pension|401k|nps)\b": "retirement_planner",
+    r"\b(retir(e|ement)|pension|401k|nps)\b": "retirement_planner",
     r"\b(tax|itr|deduction|exemption|section)\b": "tax_planner",
     r"\b(fraud|suspicious|chargeback|phishing)\b": "fraud_shield",
 }
@@ -175,6 +175,8 @@ GENERAL_QUERY_PATTERNS = [
     r"\b(difference between|types of|kinds of)\b",
     r"\b(benefits of|advantages of|disadvantages of)\b",
     r"\b(generally|typically|usually|normally)\b",
+    # How much/many questions asking for guidance (not specific calculations)
+    r"\bhow (much|many) (should|do|does)\b",
 ]
 
 PERSONALIZED_QUERY_PATTERNS = [
@@ -516,15 +518,15 @@ Respond ONLY with valid JSON:
         """
         query_lower = query.lower()
 
-        # Check for personalized patterns first (more specific)
-        for pattern in PERSONALIZED_QUERY_PATTERNS:
-            if re.search(pattern, query_lower, re.IGNORECASE):
-                return "personalized"
-
-        # Check for general patterns
+        # Check for general patterns first (informational questions)
         for pattern in GENERAL_QUERY_PATTERNS:
             if re.search(pattern, query_lower, re.IGNORECASE):
                 return "general"
+
+        # Check for personalized patterns (calculations, advice)
+        for pattern in PERSONALIZED_QUERY_PATTERNS:
+            if re.search(pattern, query_lower, re.IGNORECASE):
+                return "personalized"
 
         # Default to personalized if ambiguous (safer - will ask for profile if needed)
         return "personalized"
