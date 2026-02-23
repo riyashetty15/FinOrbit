@@ -102,6 +102,7 @@ async def knowledge_lookup(
     is_current: Optional[bool] = None,
     pii: Optional[bool] = None,
     compliance_tags_any: Optional[List[str]] = None,
+    trace_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Query the RAG knowledge base for financial information.
@@ -167,8 +168,11 @@ async def knowledge_lookup(
     rag_logger.info(f"[RAG] Sending Full Payload: {str(payload)}")
 
     try:
+        headers = {}
+        if trace_id:
+            headers["X-Trace-ID"] = str(trace_id)
         async with httpx.AsyncClient(timeout=RAG_QUERY_TIMEOUT) as client:
-            response = await client.post(RAG_API_URL, json=payload)
+            response = await client.post(RAG_API_URL, json=payload, headers=headers)
             response.raise_for_status()
             data = response.json()
 

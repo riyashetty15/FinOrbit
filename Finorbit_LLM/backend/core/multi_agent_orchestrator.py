@@ -3,6 +3,8 @@
 # ==============================================
 
 from typing import Dict, Any, List, Optional
+import asyncio
+import inspect
 import logging
 from backend.core.query_decomposer import QueryDecomposer
 from backend.core.router import RouterAgent
@@ -27,114 +29,162 @@ class MultiAgentOrchestrator:
         logger.info("MultiAgentOrchestrator initialized")
     
     async def process_complex_query(
-        self, 
-        query: str, 
+        self,
+        query: str,
         profile: Dict[str, Any],
-        session_id: str
-    ) -> Dict[str, Any]:
+        session_id: str,
+        trace_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
         """
-        Process complex query requiring multiple agents
-        
+        Process complex query requiring multiple agents.
+
+        Independent sub-queries (no depends_on) run concurrently via asyncio.gather.
+        Sub-queries with dependencies execute after their prerequisite wave completes.
+
         Returns:
-            {
-                "summary": str,  # Synthesized response from all agents
-                "sub_responses": List[Dict],  # Individual agent responses
-                "agents_used": List[str],
-                "execution_order": List[str]
-            }
+            Dict with summary, sub_responses, agents_used, execution_order — or None
+            if the query is simple and should fall back to single-agent routing.
         """
         # Step 1: Check if decomposition is needed
         needs_multi = self.decomposer.needs_decomposition(query)
-        
         if not needs_multi:
             logger.info("Query is simple, routing to single agent")
-            return None  # Fall back to single-agent routing
-        
-        logger.info(f"Complex query detected, decomposing...")
-        
+            return None
+
+        logger.info(f"[trace_id={trace_id}] Complex query detected, decomposing…")
+
         # Step 2: Decompose into sub-queries
         sub_queries = self.decomposer.decompose(query)
-        
         if len(sub_queries) <= 1:
             logger.info("Decomposition returned single query, using single agent")
             return None
-        
-        # Step 3: Execute sub-queries in dependency order
-        results = []
-        context_cache = {}  # Store results for dependencies
-        
-        for i, sub_query_info in enumerate(sub_queries):
-            sub_query = sub_query_info.get("sub_query", "")
-            agent_name = sub_query_info.get("agent", "fin_advisor")
-            depends_on = sub_query_info.get("depends_on", [])
-            
-            logger.info(f"Executing sub-query {i+1}/{len(sub_queries)}: {agent_name}")
-            
-            # Build context from dependencies
-            dependency_context = ""
-            for dep_idx in depends_on:
-                if dep_idx < len(results):
-                    dep_result = results[dep_idx]
-                    dependency_context += f"\nContext from previous query: {dep_result.get('summary', '')}\n"
-            
-            # IMPORTANT: Do not mutate the user/sub-query itself.
-            # Pass dependency context as a separate field so tools (e.g., RAG) don't receive
-            # a rewritten query string.
-            augmented_query = sub_query
-            if dependency_context and agent_name != "rag_agent":
-                augmented_query = f"{sub_query}\n\n{dependency_context}"
-            
-            # Execute agent
-            agent = self.specialist_agents.get(agent_name)
-            if not agent:
-                logger.warning(f"Agent {agent_name} not found, skipping")
-                continue
-            
-            try:
-                # Build initial state for agent
-                initial_state = {
-                    # Keep the original sub-query intact for logging and tool calls.
-                    "query": sub_query if agent_name == "rag_agent" else augmented_query,
-                    "user_query": sub_query,
-                    "dependency_context": dependency_context.strip() if dependency_context else "",
-                    "profile": profile,
-                    "intent": "general"
-                }
-                
-                # Execute agent
-                import inspect
-                if inspect.iscoroutinefunction(agent.run):
-                    result = await agent.run(initial_state)
+
+        # Step 3: Group sub-queries into dependency waves and execute in parallel per wave
+        waves = self._build_execution_waves(sub_queries)
+        results: List[Dict[str, Any]] = []
+
+        for wave_idx, wave_indices in enumerate(waves):
+            wave = [sub_queries[i] for i in wave_indices]
+            logger.info(
+                f"[trace_id={trace_id}] Wave {wave_idx + 1}/{len(waves)}: "
+                f"executing {len(wave)} sub-queries in parallel — "
+                f"{[sq.get('agent') for sq in wave]}"
+            )
+
+            wave_tasks = [
+                self._execute_single_subquery(sq, profile, results, trace_id)
+                for sq in wave
+            ]
+            wave_results = await asyncio.gather(*wave_tasks, return_exceptions=True)
+
+            for sq, wave_result in zip(wave, wave_results):
+                if isinstance(wave_result, Exception):
+                    logger.error(
+                        f"[trace_id={trace_id}] Sub-query via {sq.get('agent')} failed: {wave_result}"
+                    )
+                    results.append({
+                        "sub_query": sq.get("sub_query", ""),
+                        "agent": sq.get("agent", "unknown"),
+                        "summary": "Error: Could not process this part of the query",
+                        "sources": [],
+                        "confidence": 0.0,
+                    })
                 else:
-                    result = agent.run(initial_state)
-                
-                results.append({
-                    "sub_query": sub_query,
-                    "agent": agent_name,
-                    "summary": result.get("summary", ""),
-                    "sources": result.get("sources", []),
-                    "confidence": result.get("retrieval_score", result.get("confidence", 0.0))
-                })
-                
-            except Exception as e:
-                logger.error(f"Error executing {agent_name} for sub-query: {e}")
-                results.append({
-                    "sub_query": sub_query,
-                    "agent": agent_name,
-                    "summary": f"Error: Could not process this part of the query",
-                    "sources": [],
-                    "confidence": 0.0
-                })
-        
+                    results.append(wave_result)
+
         # Step 4: Synthesize final response
         synthesized = self._synthesize_multi_agent_response(query, results)
-        
+
         return {
             "summary": synthesized,
             "sub_responses": results,
-            "agents_used": list(set([r["agent"] for r in results])),
+            "agents_used": list(set(r["agent"] for r in results)),
             "execution_order": [r["agent"] for r in results],
-            "is_multi_agent": True
+            "is_multi_agent": True,
+        }
+
+    def _build_execution_waves(self, sub_queries: List[Dict[str, Any]]) -> List[List[int]]:
+        """
+        Group sub-query indices into dependency waves for parallel execution.
+
+        Wave 0: sub-queries with no dependencies.
+        Wave N: sub-queries whose dependencies all appear in waves 0…N-1.
+
+        Returns a list of waves, each wave being a list of sub-query indices.
+        """
+        n = len(sub_queries)
+        assigned = [False] * n
+        waves: List[List[int]] = []
+
+        while not all(assigned):
+            completed_indices = {i for batch in waves for i in batch}
+            wave: List[int] = []
+
+            for i, sq in enumerate(sub_queries):
+                if assigned[i]:
+                    continue
+                deps = sq.get("depends_on", [])
+                if all(d in completed_indices for d in deps):
+                    wave.append(i)
+
+            if not wave:
+                # Circular or unresolvable deps — add all remaining to break the loop
+                wave = [i for i in range(n) if not assigned[i]]
+
+            waves.append(wave)
+            for i in wave:
+                assigned[i] = True
+
+        return waves
+
+    async def _execute_single_subquery(
+        self,
+        sub_query_info: Dict[str, Any],
+        profile: Dict[str, Any],
+        previous_results: List[Dict[str, Any]],
+        trace_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Execute a single sub-query and return its result dict."""
+        sub_query = sub_query_info.get("sub_query", "")
+        agent_name = sub_query_info.get("agent", "fin_advisor")
+        depends_on = sub_query_info.get("depends_on", [])
+
+        # Build dependency context from previously completed results
+        dependency_context = ""
+        for dep_idx in depends_on:
+            if dep_idx < len(previous_results):
+                dep_result = previous_results[dep_idx]
+                dependency_context += f"\nContext from previous query: {dep_result.get('summary', '')}\n"
+
+        augmented_query = sub_query
+        if dependency_context and agent_name != "rag_agent":
+            augmented_query = f"{sub_query}\n\n{dependency_context}"
+
+        agent = self.specialist_agents.get(agent_name)
+        if not agent:
+            raise ValueError(f"Agent '{agent_name}' not found in specialist_agents")
+
+        logger.info(f"[trace_id={trace_id}] Executing sub-query via {agent_name}: {sub_query[:60]}")
+
+        initial_state = {
+            "query": sub_query if agent_name == "rag_agent" else augmented_query,
+            "user_query": sub_query,
+            "dependency_context": dependency_context.strip(),
+            "profile": profile,
+            "intent": "general",
+        }
+
+        if inspect.iscoroutinefunction(agent.run):
+            result = await agent.run(initial_state)
+        else:
+            result = await asyncio.to_thread(agent.run, initial_state)
+
+        return {
+            "sub_query": sub_query,
+            "agent": agent_name,
+            "summary": result.get("summary", ""),
+            "sources": result.get("sources", []),
+            "confidence": result.get("retrieval_score", result.get("confidence", 0.0)),
         }
     
     def _synthesize_multi_agent_response(

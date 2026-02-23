@@ -34,11 +34,34 @@ FINORBIT_MODULE_TABLES = {
 # ============================================================================
 # Keywords used to identify which module a user query belongs to
 FINORBIT_MODULE_KEYWORDS = {
-    "credit": ["credit", "loan", "emi", "cibil", "score", "borrow", "debt", "cibil"],
-    "investment": ["invest", "portfolio", "mutual fund", "stock", "equity", "bond", "market"],
-    "insurance": ["insurance", "premium", "coverage", "term plan", "health insurance", "policy"],
-    "retirement": ["retire", "pension", "401k", "nps", "retirement planning", "age", "elderly"],
-    "taxation": ["tax", "itr", "deduction", "exemption", "section", "income tax", "gst", "refund"]
+    "credit": [
+        "credit", "loan", "emi", "cibil", "score", "borrow", "debt",
+        "nbfc", "rbi", "lending", "mortgage", "overdraft", "credit card",
+    ],
+    "investment": [
+        "invest", "portfolio", "mutual fund", "stock", "equity", "bond", "market",
+        "etf", "exchange traded fund", "nfo", "new fund offer",
+        "smallcap", "midcap", "largecap", "flexi cap", "index fund",
+        "fixed deposit", "fd", "ncd", "non convertible debenture",
+        "ppf", "public provident fund", "ulip", "nav", "aum",
+        "sip", "systematic investment plan", "lumpsum",
+        "sebi", "shares",
+    ],
+    "insurance": [
+        "insurance", "premium", "coverage", "term plan", "health insurance", "policy",
+        "irdai", "life insurance", "vehicle insurance", "claim", "rider",
+        "endowment", "whole life", "annuity",
+    ],
+    "retirement": [
+        "retire", "pension", "401k", "nps", "retirement planning",
+        "epf", "employees provident fund", "vpf", "voluntary provident fund",
+        "gratuity", "superannuation", "pf withdrawal",
+    ],
+    "taxation": [
+        "tax", "itr", "deduction", "exemption", "section", "income tax", "gst", "refund",
+        "tds", "capital gains", "hra", "form 16", "80c", "80d",
+        "finance act", "cbdt", "advance tax",
+    ],
 }
 
 # ============================================================================

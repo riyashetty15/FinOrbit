@@ -287,42 +287,45 @@ class RetrievalService:
         return "insufficient"
 
     async def retrieve_evidence(
-        self, 
-        query: str, 
+        self,
+        query: str,
         module: Optional[str] = None,
         top_k: int = 5,
-        filters: Optional[Dict[str, Any]] = None
+        filters: Optional[Dict[str, Any]] = None,
+        trace_id: Optional[str] = None,
     ) -> EvidencePack:
         """
         Main entry point: Retrieve, Verify, and Package evidence.
-        
+
         Args:
             query: User query text
             module: RAG module to query (credit, taxation, etc.)
             top_k: Number of chunks to retrieve
             filters: Metadata filters (doc_type, year, issuer, jurisdiction, etc.)
-        
+            trace_id: Optional request trace ID for cross-service log correlation
+
         Returns:
             EvidencePack with citations and coverage assessment
         """
-        
+
         # 1. Routing
         if not module:
             module = self.determine_module(query)
-        
+
         # Initialize filters dict if None
         if filters is None:
             filters = {}
-        
+
         # 2. Retrieval (Call existing tool)
-        # Unpack filters if any
         doc_type = filters.get("doc_type")
         year = filters.get("year") or filters.get("year_min")
         issuer = filters.get("issuer")
-        jurisdiction = filters.get("jurisdiction")
-        
-        logger.info(f"Retrieving from module '{module}' for query: {query} with filters: {filters}")
-        
+
+        logger.info(
+            f"[trace_id={trace_id}] Retrieving from module '{module}' "
+            f"for query: {query[:80]} with filters: {filters}"
+        )
+
         try:
             rag_output = await knowledge_lookup(
                 query=query,
@@ -330,7 +333,8 @@ class RetrievalService:
                 top_k=top_k,
                 doc_type=doc_type,
                 year=year,
-                issuer=issuer
+                issuer=issuer,
+                trace_id=trace_id,
             )
             
             raw_results = rag_output.get("results", [])

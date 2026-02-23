@@ -4,6 +4,7 @@
 # ==============================================
 
 from typing import Dict, Any, List, Tuple, Optional
+import asyncio
 import logging
 from datetime import datetime
 
@@ -76,20 +77,20 @@ class ValidationPipeline:
 
         logger.info("[OK] ValidationPipeline initialized with 9 agents + compliance engine")
 
-    def run_pre_validation(
+    async def run_pre_validation(
         self,
         query: str,
         profile: Dict[str, Any]
     ) -> Tuple[PreValidationResult, List[AuditEntry]]:
         """
-        Run pre-validation safety checks BEFORE agent execution
+        Run pre-validation safety checks BEFORE agent execution (async, partially parallel).
 
-        Checks (in order):
-        1. PII Detection → BLOCKS if critical PII found
-        2. Content Risk → BLOCKS if illegal content detected
-        3. Age/Category Guard → LOGS warnings (non-blocking)
-        4. Mis-Selling Guard → LOGS warnings (non-blocking)
-        5. Audit Logger → LOGS query (non-blocking)
+        Execution strategy:
+        - Phase 1 (sequential): PII + Content Risk — both are fast blocking checks; abort
+          early if either fires so we never waste time on the parallel phase.
+        - Phase 2 (parallel): Age Guard, Mis-Selling Guard, Audit Logger — non-blocking
+          checks with no inter-dependencies; run concurrently via asyncio.gather.
+        - Phase 3 (sequential): Compliance engine — may do I/O; runs last.
 
         Args:
             query: User query text
@@ -97,11 +98,8 @@ class ValidationPipeline:
 
         Returns:
             Tuple of (PreValidationResult, audit_entries)
-
-        Raises:
-            No exceptions - all blocking is handled via PreValidationResult.should_block
         """
-        logger.info("[GUARD] Starting pre-validation safety checks")
+        logger.info("[GUARD] Starting pre-validation safety checks (parallel mode)")
         start_time = datetime.utcnow()
 
         audit_entries = []
@@ -112,16 +110,19 @@ class ValidationPipeline:
         age_category_warning = None
         mis_selling_risk = 0.0
 
-        # 1. PII Detection (BLOCKING)
-        logger.info("🔍 Running PII detection")
-        pii_safe, pii_issues, pii_meta = self.pii_detector.check(query, profile)
+        # ── Phase 1: Blocking checks (sequential, cheap regex ops) ──────────
+        logger.info("Running PII detection + content risk filter")
+        pii_safe, pii_issues, pii_meta = await asyncio.to_thread(
+            self.pii_detector.check, query, profile
+        )
+        content_safe, content_issues, content_meta = await asyncio.to_thread(
+            self.content_filter.check, query, profile
+        )
 
         if not pii_safe:
             pii_detected = True
             pii_entities = pii_meta.get("pii_entities", [])
             blocking_issues.extend(pii_issues)
-
-            # Log audit entry
             audit_entries.append(AuditEntry(
                 timestamp=datetime.utcnow().isoformat(),
                 event_type="pii_detected",
@@ -130,18 +131,11 @@ class ValidationPipeline:
                 severity=Severity.CRITICAL,
                 action_taken="blocked"
             ))
-
             logger.error(f"[ERROR] PII detected: {pii_meta.get('pii_types', [])}")
-
-        # 2. Content Risk Filter (BLOCKING)
-        logger.info("🔍 Running content risk filter")
-        content_safe, content_issues, content_meta = self.content_filter.check(query, profile)
 
         if not content_safe:
             content_risk_flags = content_meta.get("risk_flags", [])
             blocking_issues.extend(content_issues)
-
-            # Log audit entry
             audit_entries.append(AuditEntry(
                 timestamp=datetime.utcnow().isoformat(),
                 event_type="content_risk_detected",
@@ -150,17 +144,36 @@ class ValidationPipeline:
                 severity=Severity.CRITICAL,
                 action_taken="blocked"
             ))
-
             logger.error(f"[ERROR] Content risk detected: {content_risk_flags}")
 
-        # 3. Age/Category Guard (NON-BLOCKING)
-        logger.info("🔍 Running age/category guard")
-        age_safe, age_issues, age_meta = self.age_guard.check(query, profile)
+        # Early exit — no point running further checks if already blocked
+        if blocking_issues:
+            result = PreValidationResult(
+                pii_detected=pii_detected,
+                pii_entities=pii_entities,
+                mis_selling_risk=0.0,
+                age_category_warning=None,
+                content_risk_flags=content_risk_flags,
+                blocking_issues=blocking_issues,
+                should_block=True,
+                safe_to_proceed=False,
+            )
+            duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
+            logger.info(f"[OK] Pre-validation BLOCKED (early exit) in {duration_ms:.2f}ms")
+            return result, audit_entries
+
+        # ── Phase 2: Non-blocking checks in parallel ─────────────────────────
+        logger.info("Running age guard / mis-selling guard / audit logger in parallel")
+        (_, _, age_meta), \
+        (_, _, missell_meta), \
+        _ = await asyncio.gather(
+            asyncio.to_thread(self.age_guard.check, query, profile),
+            asyncio.to_thread(self.missell_guard.check, query, profile),
+            asyncio.to_thread(self.audit_logger.check, query, profile),
+        )
 
         if age_meta.get("warnings"):
             age_category_warning = ", ".join(age_meta.get("warnings", []))
-
-            # Log audit entry
             audit_entries.append(AuditEntry(
                 timestamp=datetime.utcnow().isoformat(),
                 event_type="age_category_warning",
@@ -169,17 +182,10 @@ class ValidationPipeline:
                 severity=Severity.WARNING,
                 action_taken="logged"
             ))
-
             logger.warning(f"[WARNING] Age/category warnings: {age_category_warning}")
 
-        # 4. Mis-Selling Guard (NON-BLOCKING)
-        logger.info("🔍 Running mis-selling guard")
-        missell_safe, missell_issues, missell_meta = self.missell_guard.check(query, profile)
-
         mis_selling_risk = missell_meta.get("risk_score", 0.0)
-
         if mis_selling_risk >= 0.5:
-            # Log audit entry
             audit_entries.append(AuditEntry(
                 timestamp=datetime.utcnow().isoformat(),
                 event_type="misselling_risk",
@@ -188,34 +194,21 @@ class ValidationPipeline:
                 severity=Severity.WARNING,
                 action_taken="logged"
             ))
-
             logger.warning(f"[WARNING] Mis-selling risk: {mis_selling_risk:.2f}")
 
-        # 5. Audit Logger (NON-BLOCKING)
-        logger.info("📝 Logging query to audit trail")
-        audit_safe, audit_issues, audit_meta = self.audit_logger.check(query, profile)
-
-        # 6. Compliance Engine Input Guardrails (BLOCKING)
+        # ── Phase 3: Compliance engine (sequential, may be I/O bound) ────────
         if self.compliance_engine:
-            logger.info("🔍 Running compliance engine input guardrails")
+            logger.info("Running compliance engine input guardrails")
             try:
-                # Run compliance check on input query
-                # compliance_check expects (answer_text, context) where answer_text will be checked
-                # against rules, and context['user_query'] is also checked for rule violations
                 compliance_context = {
                     "user_query": query,
-                    "module": "GENERIC",  # Pre-validation doesn't know target module yet
+                    "module": "GENERIC",
                     "language": "en",
-                    "channel": "ALL"
+                    "channel": "ALL",
                 }
-                # Pass empty answer for input checking - rules will match against user_query in context
                 compliance_result = self.compliance_engine.compliance_check("", compliance_context)
-                
-                # Check if compliance blocked the query
                 if compliance_result.status in ["BLOCKED", "FORCE_SAFE_ANSWER"]:
                     blocking_issues.append(compliance_result.final_answer)
-                    
-                    # Log audit entry
                     audit_entries.append(AuditEntry(
                         timestamp=datetime.utcnow().isoformat(),
                         event_type="compliance_block",
@@ -223,21 +216,16 @@ class ValidationPipeline:
                         details={
                             "status": compliance_result.status,
                             "message": compliance_result.final_answer,
-                            "matched_rules": compliance_result.triggered_rule_ids
+                            "matched_rules": compliance_result.triggered_rule_ids,
                         },
                         severity=Severity.CRITICAL,
                         action_taken="blocked"
                     ))
-                    
                     logger.error(f"[ERROR] Compliance engine blocked query: {compliance_result.final_answer}")
             except Exception as e:
                 logger.warning(f"[WARN] Compliance engine check failed: {e}")
 
-        # Determine if execution should be blocked
         should_block = len(blocking_issues) > 0
-        safe_to_proceed = not should_block
-
-        # Create aggregated result
         result = PreValidationResult(
             pii_detected=pii_detected,
             pii_entities=pii_entities,
@@ -246,45 +234,35 @@ class ValidationPipeline:
             content_risk_flags=content_risk_flags,
             blocking_issues=blocking_issues,
             should_block=should_block,
-            safe_to_proceed=safe_to_proceed
+            safe_to_proceed=not should_block,
         )
 
-        end_time = datetime.utcnow()
-        duration_ms = (end_time - start_time).total_seconds() * 1000
-
+        duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
         logger.info(f"[OK] Pre-validation complete in {duration_ms:.2f}ms - {'BLOCKED' if should_block else 'SAFE'}")
-
         return result, audit_entries
 
-    def run_post_validation(
+    async def run_post_validation(
         self,
         response: str,
         context: Dict[str, Any]
     ) -> Tuple[PostValidationResult, List[AuditEntry]]:
         """
-        Run post-validation quality checks AFTER agent execution
+        Run post-validation quality checks AFTER agent execution (async, parallel).
 
-        Checks (in order):
-        1. Grounding Check → Verify claims against sources
-        2. Numeric Validation → Check numbers against reference tables
-        3. Regulatory Consistency → Detect illegal advice/missing disclaimers
-        4. Suitability Check → Ensure advice matches user profile
-        5. Tone & Clarity → Check for clear, understandable language
+        All four validators are independent — they run concurrently via asyncio.gather.
+        If intent == "general", grounding is skipped (returns a passing stub) and the
+        remaining three run in parallel.
 
-        Only CRITICAL severity issues block the response. WARNING issues are logged.
+        Only CRITICAL severity issues block the response; WARNING issues are logged.
 
         Args:
             response: Agent's response text
-            context: Context dict containing:
-                - query: str - Original user query
-                - profile: Dict - User profile
-                - retrieved_passages: List[str] - RAG sources (if available)
-                - agent: str - Which agent generated response
+            context: Context dict with query, profile, retrieved_passages, agent, intent.
 
         Returns:
             Tuple of (PostValidationResult, audit_entries)
         """
-        logger.info("[OK] Starting post-validation quality checks")
+        logger.info("[OK] Starting post-validation quality checks (parallel mode)")
         start_time = datetime.utcnow()
 
         audit_entries = []
@@ -292,13 +270,11 @@ class ValidationPipeline:
         blocking_issues = []
         warnings = []
 
-        # Check intent - skip strict validation for general information
         intent = context.get("intent", "personalized")
 
         if intent == "general":
-            logger.info("ℹ️ General information mode - skipping strict numeric and grounding validation")
-
-            # Create passing results for skipped validators
+            logger.info("General information mode — skipping grounding, parallelising remaining checks")
+            # Stub a passing grounding result
             grounding_result = ValidationCheck(
                 agent_name="grounding_check",
                 check_type="grounding",
@@ -307,38 +283,44 @@ class ValidationPipeline:
                 severity=Severity.INFO,
                 issues=[],
                 recommendations=[],
-                metadata={"skipped": "general_information", "reason": "No source passages needed for educational content"}
+                metadata={"skipped": "general_information",
+                           "reason": "No source passages needed for educational content"},
             )
-            validation_checks.append(grounding_result)
-
+            # Run remaining three in parallel
+            regulatory_result, suitability_result, tone_result = await asyncio.gather(
+                asyncio.to_thread(self.regulatory_check.validate, response, context),
+                asyncio.to_thread(self.suitability_check.validate, response, context),
+                asyncio.to_thread(self.tone_check.validate, response, context),
+            )
         else:
-            # Personalized mode - run full validation
+            logger.info("Personalised mode — running all four post-validation checks in parallel")
+            grounding_result, regulatory_result, suitability_result, tone_result = await asyncio.gather(
+                asyncio.to_thread(self.grounding_check.validate, response, context),
+                asyncio.to_thread(self.regulatory_check.validate, response, context),
+                asyncio.to_thread(self.suitability_check.validate, response, context),
+                asyncio.to_thread(self.tone_check.validate, response, context),
+            )
 
-            # 1. Grounding Check
-            logger.info("🔍 Running grounding check")
-            grounding_result = self.grounding_check.validate(response, context)
-            validation_checks.append(grounding_result)
+        validation_checks.append(grounding_result)
 
-            if grounding_result.severity == Severity.CRITICAL:
-                blocking_issues.extend(grounding_result.issues)
-                audit_entries.append(AuditEntry(
-                    timestamp=datetime.utcnow().isoformat(),
-                    event_type="grounding_failure",
-                    agent_name="grounding_check",
-                    details=grounding_result.metadata,
-                    severity=Severity.CRITICAL,
-                    action_taken="blocked"
-                ))
-                logger.error(f"[ERROR] Grounding check CRITICAL failure: {grounding_result.issues}")
-            elif grounding_result.severity == Severity.WARNING:
-                warnings.extend(grounding_result.issues)
-                logger.warning(f"[WARNING] Grounding check warning: {grounding_result.issues}")
+        # Evaluate grounding (only meaningful in personalised mode)
+        if grounding_result.severity == Severity.CRITICAL:
+            blocking_issues.extend(grounding_result.issues)
+            audit_entries.append(AuditEntry(
+                timestamp=datetime.utcnow().isoformat(),
+                event_type="grounding_failure",
+                agent_name="grounding_check",
+                details=grounding_result.metadata,
+                severity=Severity.CRITICAL,
+                action_taken="blocked",
+            ))
+            logger.error(f"[ERROR] Grounding check CRITICAL failure: {grounding_result.issues}")
+        elif grounding_result.severity == Severity.WARNING:
+            warnings.extend(grounding_result.issues)
+            logger.warning(f"[WARNING] Grounding check warning: {grounding_result.issues}")
 
-        # 2. Regulatory Consistency (always run for both general and personalized)
-        logger.info("🔍 Running regulatory consistency check")
-        regulatory_result = self.regulatory_check.validate(response, context)
+        # Regulatory consistency
         validation_checks.append(regulatory_result)
-
         if regulatory_result.severity == Severity.CRITICAL:
             blocking_issues.extend(regulatory_result.issues)
             audit_entries.append(AuditEntry(
@@ -347,18 +329,15 @@ class ValidationPipeline:
                 agent_name="regulatory_consistency",
                 details=regulatory_result.metadata,
                 severity=Severity.CRITICAL,
-                action_taken="blocked"
+                action_taken="blocked",
             ))
             logger.error(f"[ERROR] Regulatory check CRITICAL failure: {regulatory_result.issues}")
         elif regulatory_result.severity == Severity.WARNING:
             warnings.extend(regulatory_result.issues)
             logger.warning(f"[WARNING] Regulatory check warning: {regulatory_result.issues}")
 
-        # 4. Suitability Check
-        logger.info("🔍 Running suitability check")
-        suitability_result = self.suitability_check.validate(response, context)
+        # Suitability
         validation_checks.append(suitability_result)
-
         if suitability_result.severity == Severity.CRITICAL:
             blocking_issues.extend(suitability_result.issues)
             audit_entries.append(AuditEntry(
@@ -367,34 +346,27 @@ class ValidationPipeline:
                 agent_name="suitability_check",
                 details=suitability_result.metadata,
                 severity=Severity.CRITICAL,
-                action_taken="blocked"
+                action_taken="blocked",
             ))
             logger.error(f"[ERROR] Suitability check CRITICAL failure: {suitability_result.issues}")
         elif suitability_result.severity == Severity.WARNING:
             warnings.extend(suitability_result.issues)
             logger.warning(f"[WARNING] Suitability check warning: {suitability_result.issues}")
 
-        # 5. Tone & Clarity
-        logger.info("🔍 Running tone & clarity check")
-        tone_result = self.tone_check.validate(response, context)
+        # Tone & clarity (never blocks)
         validation_checks.append(tone_result)
-
-        # Tone check is always WARNING or INFO (never blocks)
         if tone_result.severity == Severity.WARNING:
             warnings.extend(tone_result.issues)
             logger.warning(f"[WARNING] Tone & clarity warning: {tone_result.issues}")
 
-        # Determine if response should be blocked
         should_block = len(blocking_issues) > 0
-
-        # Create aggregated result
         result = PostValidationResult(
             grounding_ok=grounding_result.passed,
             grounding_score=grounding_result.confidence,
             reg_ok=regulatory_result.passed,
             reg_score=regulatory_result.confidence,
-            numeric_ok=True,  # Numeric validation moved to finance_math tools
-            numeric_score=1.0,  # Default passing score
+            numeric_ok=True,
+            numeric_score=1.0,
             suitability_ok=suitability_result.passed,
             suitability_score=suitability_result.confidence,
             tone_ok=tone_result.passed,
@@ -402,14 +374,11 @@ class ValidationPipeline:
             validation_checks=validation_checks,
             blocking_issues=blocking_issues,
             warnings=warnings,
-            should_block=should_block
+            should_block=should_block,
         )
 
-        end_time = datetime.utcnow()
-        duration_ms = (end_time - start_time).total_seconds() * 1000
-
+        duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
         logger.info(f"[OK] Post-validation complete in {duration_ms:.2f}ms - {'BLOCKED' if should_block else 'PASSED'}")
-
         return result, audit_entries
 
     def calculate_confidence(

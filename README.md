@@ -4,16 +4,13 @@
 
 FinOrbit is an intelligent financial advisory system that combines specialized AI agents with a production-grade Retrieval-Augmented Generation (RAG) system to deliver accurate, compliant, and contextual financial guidance across credit, investment, insurance, taxation, and retirement planning.
 
-<!-- TODO: Add hero image or demo GIF showing the chat interface -->
-<!-- ![FinOrbit Demo](docs/images/finorbit-demo.gif) -->
-
 ---
 
 ## Key Features
 
 ### Multi-Agent Orchestration
 - **5 Specialized Agents**: Credit & Loans, Investment Coach, Tax Planner, Retirement Planner, Insurance Analyzer
-- **Intelligent Routing**: Semantic query classification with conversation context preservation
+- **Intelligent Routing**: Semantic query classification with domain pre-emption and conversation context preservation
 - **Parallel Processing**: Multi-agent orchestration for complex financial queries
 
 ### Production-Grade RAG System
@@ -36,9 +33,6 @@ FinOrbit is an intelligent financial advisory system that combines specialized A
 ---
 
 ## Architecture
-
-<!-- TODO: Add architecture diagram image -->
-<!-- ![System Architecture](docs/images/architecture-diagram.png) -->
 
 ```
 ┌─────────────┐
@@ -92,7 +86,7 @@ FinOrbit is an intelligent financial advisory system that combines specialized A
 
 - **Python 3.11+**
 - **PostgreSQL 15+** with `pgvector` extension (or use Docker)
-- **Google Gemini API Key** ([Get one here](https://makersuite.google.com/app/apikey))
+- **OpenAI API Key** ([get one here](https://platform.openai.com/api-keys))
 
 ### 1. Clone the Repository
 
@@ -149,10 +143,18 @@ cp .env.example .env
 Edit `.env`:
 
 ```dotenv
-LLM_API_KEY=your_gemini_api_key_here
-CUSTOM_MODEL_NAME=gemini-1.5-flash
+# LLM Provider — "openai" (default) or "gemini"
+LLM_PROVIDER=openai
+LLM_API_KEY=your_openai_api_key_here
+
+# Optional: override the default model
+CUSTOM_MODEL_NAME=gpt-4o-mini
+
+# PostgreSQL (same DB as RAG server)
 DATABASE_URL=postgresql://postgres:your_password@localhost:5432/financial_rag
 ```
+
+> **Gemini users:** Set `LLM_PROVIDER=gemini` and use your Google API key as `LLM_API_KEY`.
 
 ### 4. Install Dependencies
 
@@ -208,12 +210,6 @@ python3 -m backend.server
 ```
 
 ### 7. Access the UI
-<!-- TODO: Add screenshot of the chat interface -->
-<!-- ![Chat Interface](docs/images/chat-interface.png) -->
-
-
-<!-- TODO: Add usage demonstration screenshots or GIFs -->
-<!-- ![Query Example](docs/images/query-example.png) -->
 
 Open your browser: **http://localhost:8000/ui**
 
@@ -238,7 +234,8 @@ curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
   -d '{
     "query": "What are the NBFC NPA classification rules according to RBI?",
-    "conversationId": "user123"
+    "userId": "user_123",
+    "conversationId": "conv_001"
   }'
 ```
 
@@ -257,14 +254,14 @@ curl -X POST "http://localhost:8081/ingest" \
 - `credit` - Loans, EMI, CIBIL, NBFC regulations
 - `investment` - Mutual funds, stocks, SIPs, SEBI guidelines
 - `insurance` - Life, health, vehicle insurance (IRDAI)
-- `retirement` - NPS, pension planning
+- `retirement` - NPS, EPF, pension planning
 - `taxation` - Income tax, deductions (IT Act)
 
 ---
 
 ## Testing
 
-Run the full test suite:
+### Unit & Integration Tests (pytest)
 
 ```bash
 cd Finorbit_LLM
@@ -272,7 +269,32 @@ source .venv/bin/activate
 pytest tests/ -v
 ```
 
-**Test Coverage:**
+### Live Integration Test Suite
+
+The integration test suite validates the full pipeline against a running server (47 test cases across 6 sections):
+
+```bash
+cd Finorbit_LLM
+source .venv/bin/activate
+
+# Full suite (requires RAG server + ingested documents for citation tests)
+python tests/test_citations.py
+
+# Skip citation tests if no documents are ingested yet
+python tests/test_citations.py --skip-citations
+```
+
+**Test sections:**
+| Section | Coverage |
+|---------|----------|
+| Health & Metrics | `/health` and `/metrics` endpoint validation |
+| Response Schema | All required fields in `QueryResponse` |
+| Routing Accuracy | 8 domain-routing cases (investment, tax, insurance, retirement) |
+| Citation Extraction | Citation fields, scores, evidence gating |
+| Conversation Context | Multi-turn context persistence |
+| Edge Cases | 422 validation, whitespace queries, profileHint |
+
+**Test Coverage (unit):**
 - Evidence retrieval and coverage scoring
 - Routing with conversation context
 - Guardrails enforcement (PII, hallucination, compliance)
@@ -296,15 +318,18 @@ FinOrbit/
 │   │   │   │   └── retirement_planner.py
 │   │   │   └── validation/   # Post-guardrails
 │   │   ├── core/             # Orchestration & routing
-│   │   │   ├── router.py     # RouteIntent with evidence detection
+│   │   │   ├── router.py     # RouteIntent with domain pre-emption
 │   │   │   ├── multi_agent_orchestrator.py
-│   │   │   └── conversation_context.py
+│   │   │   ├── conversation_context.py
+│   │   │   ├── pipeline.py   # Pre/post validation (parallelized)
+│   │   │   └── llm_provider.py  # OpenAI / Gemini abstraction
 │   │   ├── services/         # Business logic
 │   │   │   ├── retrieval_service.py  # RAG with EvidencePack
 │   │   │   └── decision_engine.py    # Evidence gating
 │   │   ├── tools/            # Finance math, RAG client
-│   │   └── server.py         # FastAPI app
-│   └── tests/                # Test suite
+│   │   ├── migrations/       # DB schema migrations
+│   │   └── server.py         # FastAPI app + /metrics endpoint
+│   └── tests/                # Test suite (unit + live integration)
 │
 ├── Finorbit_RAG/              # RAG Server (MCP) (Port 8081)
 │   ├── core/                 # LlamaIndex setup
@@ -312,13 +337,11 @@ FinOrbit/
 │   ├── retrieval/            # Retrieval with metadata filters
 │   ├── stores/               # Vector store (pgvector)
 │   ├── mcp_server/           # MCP protocol handlers
+│   ├── scripts/              # CLI ingestion tools
 │   └── main.py               # FastAPI RAG server
 │
 ├── docs/                     # Documentation
 └── README.md                 # This file
-<!-- TODO: Add diagram showing RAG flow with evidence contracts -->
-<!-- ![RAG Evidence Flow](docs/images/rag-evidence-flow.png) -->
-
 ```
 
 ---
@@ -360,7 +383,7 @@ The system **refuses** to answer regulatory queries when evidence is insufficien
 
 **Response (No Docs Available):**
 ```
-I cannot provide accurate information about SEBI cryptocurrency regulations 
+I cannot provide accurate information about SEBI cryptocurrency regulations
 without verified regulatory documents.
 
 To help me provide accurate information, please clarify:
@@ -379,9 +402,6 @@ filters = {
     "year_min": 2023,        # GTE operator
     "issuer": "RBI",
     "jurisdiction": "IN",
-<!-- TODO: Add guardrails pipeline visualization -->
-<!-- ![Guardrails Pipeline](docs/images/guardrails-pipeline.png) -->
-
     "is_current": True,
     "doc_type": "regulation"
 }
@@ -394,7 +414,7 @@ filters = {
 ### Guardrails Pipeline
 
 1. **Pre-Guardrails**
-   - PII masking (Drivers License, phone numbers)
+   - PII masking (Aadhaar, PAN, phone numbers)
    - Jailbreak attempt detection
    - Input sanitization
 
@@ -414,7 +434,7 @@ Every regulatory claim is validated:
 
 ```python
 # Valid: Backed by citation
-"RBI requires NBFCs to classify NPAs after 90 days of default 
+"RBI requires NBFCs to classify NPAs after 90 days of default
 (Source: RBI_NBFC_Master_Direction_2024.pdf, Page 12)"
 
 # Invalid: No citation provided
@@ -475,6 +495,15 @@ lsof -ti:8000 | xargs kill -9
 lsof -ti:8081 | xargs kill -9
 ```
 
+### Missing API Key
+
+```bash
+# Check your .env file is populated
+cat Finorbit_LLM/.env | grep LLM_API_KEY
+
+# The server will fail to start if LLM_API_KEY is not set
+```
+
 ### Module Import Errors
 
 ```bash
@@ -491,9 +520,6 @@ pip install -e .
 # Check PostgreSQL status
 lsof -i :5432
 
-<!-- TODO: Add monitoring dashboard screenshot -->
-<!-- ![Monitoring Dashboard](docs/images/monitoring-dashboard.png) -->
-
 # Restart Docker container
 cd Finorbit_RAG
 docker-compose restart postgres
@@ -502,6 +528,12 @@ docker-compose restart postgres
 ---
 
 ## Monitoring & Observability
+
+The `/metrics` endpoint provides real-time system stats:
+
+```bash
+curl http://localhost:8000/metrics | python3 -m json.tool
+```
 
 Key events logged:
 
@@ -548,6 +580,9 @@ pip install -e ".[dev]"
 # Run tests with coverage
 pytest --cov=backend tests/
 
+# Run live integration tests
+python tests/test_citations.py --skip-citations
+
 # Format code
 black backend/ tests/
 ```
@@ -565,14 +600,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **LlamaIndex** - RAG framework
 - **FastAPI** - API framework
 - **PostgreSQL + pgvector** - Vector database
-- **OpenAI/Gemini** - LLM provider
+- **OpenAI / Google Gemini** - LLM providers
 - **LangGraph** - Agent workflow orchestration
 
 ---
 
 ## Contact
 
-For questions, issues, or collaboration, feel free to connect with me here or on Linkedin
+For questions, issues, or collaboration, feel free to connect with me here or on LinkedIn.
 
 - **[LinkedIn](https://www.linkedin.com/in/riyashetty1598/)**
 

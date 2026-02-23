@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     custom_model_name: str = "gpt-4o-mini"
     header_id: Optional[str] = None
 
+    # ==================== LLM Provider ====================
+    llm_provider: str = "openai"        # "openai" | "gemini"
+    google_api_key: Optional[str] = None
+
     # ==================== Database ====================
     database_url: str
 

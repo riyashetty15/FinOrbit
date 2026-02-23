@@ -7,11 +7,13 @@ import os
 import re
 import logging
 import asyncio
+import time as _time_module
+from collections import defaultdict
 from contextlib import asynccontextmanager
 from hashlib import sha256
+from threading import Lock as _Lock
 from typing import Dict, Any, Optional, List
 
-from openai import OpenAI
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
@@ -35,7 +37,6 @@ from backend.core.router import RouterAgent
 from backend.core.conversation_context import ConversationContext, ProfileExtractor
 from backend.core.multi_agent_orchestrator import MultiAgentOrchestrator
 from backend.logging_config import setup_logging, TraceContext, log_event
-from backend.config import settings
 
 # Specialist agents
 from backend.agents.specialist.tax_planner import TaxPlanner
@@ -69,46 +70,34 @@ logger = logging.getLogger(__name__)
 logger.info("Unified backend server starting up...")
 
 
-def _get_openai_client() -> OpenAI:
-    """Return a configured OpenAI client."""
-    api_key = settings.llm_api_key
-    if not api_key:
-        logger.warning("LLM_API_KEY is not set; main agent will be disabled.")
-        return None
-    return OpenAI(api_key=api_key)
-
-
-async def _run_gemini_finance_agent(user_input: str) -> str:
-    """Main agent implemented on OpenAI chat completions."""
-    client = _get_openai_client()
-    if not client:
+async def _run_finance_agent(user_input: str) -> str:
+    """Main agent: provider-agnostic via LLMProvider abstraction."""
+    from backend.core.llm_provider import get_llm_provider
+    try:
+        provider = get_llm_provider()
+    except RuntimeError as exc:
+        logger.warning(f"LLMProvider unavailable: {exc}")
         return _hallucination_fallback_message()
 
     try:
-        model_name = settings.custom_model_name or "gpt-4o-mini"
-        prompt = f"{finorbit_instructions.strip()}\n\nUser question:\n{user_input}"
-
-        def _call():
-            return client.chat.completions.create(
-                model=model_name,
-                messages=[
-                    {"role": "system", "content": finorbit_instructions.strip()},
-                    {"role": "user", "content": user_input},
-                ],
-                temperature=0.3,
-                max_tokens=2048,
-            )
-
-        response = await asyncio.to_thread(_call)
-        text = (response.choices[0].message.content or "").strip()
+        text = await provider.async_complete(
+            user_prompt=user_input,
+            system_prompt=finorbit_instructions.strip(),
+            max_tokens=2048,
+            temperature=0.3,
+        )
         if not text:
             logger.warning("Main agent returned empty response; using handover message.")
             return _hallucination_fallback_message()
-        logger.info("OpenAI main agent responded successfully.")
+        logger.info(f"Main agent ({provider.model_name}) responded successfully.")
         return text
-    except Exception as e:  # pragma: no cover
+    except Exception as e:
         logger.error(f"Main agent failed: {e}")
         return _hallucination_fallback_message()
+
+
+# Keep old name as alias for backward-compat with any callers that reference it directly.
+_run_gemini_finance_agent = _run_finance_agent
 
 
 def _hallucination_fallback_message() -> str:
@@ -228,6 +217,15 @@ def _infer_compliance_module(
                 break
 
     return module or "GENERIC"
+
+
+# ---------------------------
+# In-process metrics (Step 6)
+# ---------------------------
+_SERVER_START_TIME = _time_module.time()
+_metrics_lock = _Lock()
+_pipeline_metrics: Dict[str, Dict[str, int]] = defaultdict(lambda: {"pass": 0, "fail": 0})
+_agent_execution_counts: Dict[str, int] = defaultdict(int)
 
 
 # ---------------------------
@@ -383,7 +381,7 @@ async def process_query(request: QueryRequest):
             # ---------------------------
             # Load Conversation Context
             # ---------------------------
-            conversation_context = ConversationContext.get_context(request.conversationId)
+            conversation_context = await ConversationContext.get_context_async(request.conversationId)
 
             log_event(logger, "conversation_context_loaded", "context", {
                 "has_context": conversation_context is not None,
@@ -418,7 +416,12 @@ async def process_query(request: QueryRequest):
                 "final_profile": profile
             })
 
-            pre_val_result, pre_audits = validation_pipeline.run_pre_validation(user_input, profile)
+            pre_val_result, pre_audits = await validation_pipeline.run_pre_validation(user_input, profile)
+
+            # Track pre-validation metrics
+            with _metrics_lock:
+                _pipeline_metrics["pii"]["pass" if not pre_val_result.pii_detected else "fail"] += 1
+                _pipeline_metrics["content_risk"]["pass" if not pre_val_result.content_risk_flags else "fail"] += 1
 
             if pre_val_result.should_block:
                 log_event(logger, "pre_validation_blocked", "pipeline", {
@@ -454,7 +457,8 @@ async def process_query(request: QueryRequest):
                 multi_result = await orchestrator.process_complex_query(
                     query=full_context,
                     profile=profile,
-                    session_id=request.conversationId
+                    session_id=request.conversationId,
+                    trace_id=str(trace_id),
                 )
             else:
                 log_event(logger, "orchestrator_skipped", "orchestrator", {
@@ -505,8 +509,25 @@ async def process_query(request: QueryRequest):
             else:
                 # Simple query - use single-agent routing
                 # ---------------------------
-                # STEP 3: Context-Aware Routing with Intent Classification
+                # STEP 3: Routing + Evidence Retrieval (parallel where possible)
                 # ---------------------------
+                # Quick pre-check decides whether to launch evidence retrieval optimistically
+                # in parallel with the LLM routing call (~300-500 ms). If the full route
+                # later confirms evidence is not needed, we cancel the task.
+                _quick_needs_evidence = router_agent._detect_evidence_need(user_input)
+                _evidence_task = None
+                if _quick_needs_evidence:
+                    _evidence_task = asyncio.create_task(
+                        retrieval_service.retrieve_evidence(
+                            query=user_input,
+                            module=None,
+                            top_k=8,
+                            filters={"jurisdiction": "IN"},
+                            trace_id=str(trace_id),
+                        )
+                    )
+
+                # Route (may call LLM — this overlaps with the evidence task above)
                 agent_type, intent = router_agent.route_with_context(
                     query=user_input,
                     conversation_context=conversation_context
@@ -522,7 +543,7 @@ async def process_query(request: QueryRequest):
                 })
 
                 # ---------------------------
-                # STEP 3.5: Production-Grade RAG - RouteIntent with Evidence Detection
+                # STEP 3.5: RouteIntent with Evidence Detection
                 # ---------------------------
                 route_intent = router_agent.route_with_evidence_intent(
                     query=user_input,
@@ -538,45 +559,50 @@ async def process_query(request: QueryRequest):
                 })
 
                 # ---------------------------
-                # STEP 3.6: Evidence Retrieval (if regulatory grounding required)
+                # STEP 3.6: Evidence Retrieval (consume parallel task or fetch fresh)
                 # ---------------------------
                 evidence_pack = None
                 if route_intent.needs_evidence:
                     log_event(logger, "evidence_retrieval_start", "rag", {
                         "module": route_intent.module,
-                        "time_sensitivity": route_intent.time_sensitivity
+                        "time_sensitivity": route_intent.time_sensitivity,
+                        "parallel": _evidence_task is not None,
                     })
-                    
-                    # Build filters from route intent
-                    filters = {
-                        "jurisdiction": route_intent.jurisdiction,
-                    }
-                    
-                    # Add time sensitivity filters to get latest documents
+
+                    # Build filters (time-sensitivity refined after routing)
+                    _ev_filters: Dict[str, Any] = {"jurisdiction": route_intent.jurisdiction}
                     if route_intent.time_sensitivity == "high":
-                        filters["is_current"] = True
-                        filters["year_min"] = 2023  # Last 3 years for time-sensitive queries
-                    
-                    # Retrieve evidence with coverage scoring
+                        _ev_filters["is_current"] = True
+                        _ev_filters["year_min"] = 2023
+
                     try:
-                        # Let retrieval_service determine the correct RAG module
-                        # based on query content (module parameter = None triggers auto-detection)
-                        evidence_pack = await retrieval_service.retrieve_evidence(
-                            query=user_input,
-                            module=None,  # Auto-detect RAG module from query
-                            top_k=8,
-                            filters=filters
-                        )
-                        
+                        if _evidence_task is not None:
+                            # Reuse the already-running parallel task
+                            evidence_pack = await _evidence_task
+                            _evidence_task = None
+                        else:
+                            evidence_pack = await retrieval_service.retrieve_evidence(
+                                query=user_input,
+                                module=None,
+                                top_k=8,
+                                filters=_ev_filters,
+                                trace_id=str(trace_id),
+                            )
+
                         log_event(logger, "evidence_retrieval_complete", "rag", {
                             "coverage": evidence_pack.coverage,
                             "citations_count": len(evidence_pack.citations),
                             "confidence": evidence_pack.confidence,
-                            "rejection_reason": evidence_pack.rejection_reason
+                            "rejection_reason": evidence_pack.rejection_reason,
                         })
                     except Exception as e:
                         logger.error(f"Evidence retrieval failed: {e}")
                         evidence_pack = None
+                else:
+                    # Evidence not needed — cancel the optimistic task if it was started
+                    if _evidence_task is not None:
+                        _evidence_task.cancel()
+                        _evidence_task = None
                 
                 # ---------------------------
                 # STEP 3.7: Evidence Gate Check - Refuse if insufficient evidence
@@ -728,6 +754,7 @@ async def process_query(request: QueryRequest):
                         "intent_tags": intent_tags,
                         "regulator_scope": ["RBI", "SEBI", "IRDAI", "PFRDA", "IT", "CERT_IN", "GENERIC"],
                         "query_id": str(trace_id),
+                        "trace_id": str(trace_id),
                         "user_id_hash": user_id_hash,
                         "user_query": user_input,
                     }
@@ -776,7 +803,18 @@ async def process_query(request: QueryRequest):
                 "intent": intent  # Pass intent for validation mode (general vs personalized)
             }
 
-            post_val_result, post_audits = validation_pipeline.run_post_validation(response_text, context)
+            # Track agent execution count
+            with _metrics_lock:
+                _agent_execution_counts[agent_type] += 1
+
+            post_val_result, post_audits = await validation_pipeline.run_post_validation(response_text, context)
+
+            # Track post-validation metrics
+            with _metrics_lock:
+                for vc in (post_val_result.validation_checks or []):
+                    check_type = getattr(vc, "check_type", "unknown")
+                    passed = getattr(vc, "severity", None) != Severity.CRITICAL
+                    _pipeline_metrics[check_type]["pass" if passed else "fail"] += 1
 
             if post_val_result.should_block:
                 if _should_hallucination_fallback(post_val_result):
@@ -855,10 +893,10 @@ async def process_query(request: QueryRequest):
             # ---------------------------
             # STEP 7: Update Conversation Context
             # ---------------------------
-            ConversationContext.update_context(
+            await ConversationContext.update_context_async(
                 conversation_id=request.conversationId,
                 agent=agent_type,
-                profile_updates=extracted_profile
+                profile_updates=extracted_profile,
             )
 
             log_event(logger, "conversation_context_updated", "context", {
@@ -1098,6 +1136,45 @@ async def health_check():
         "pipeline": "initialized",
         "specialist_agents": len(specialist_agents),
         "database": "connected" if DATABASE_URL else "not configured"
+    }
+
+
+@app.get("/metrics")
+async def get_metrics():
+    """
+    Expose internal observability metrics.
+
+    Returns router routing metrics (cache, LLM calls, latency percentiles, circuit breaker),
+    pipeline validation pass/fail rates per check type, per-agent execution counts, and
+    server uptime. All counters reset on server restart.
+    """
+    uptime_seconds = round(_time_module.time() - _SERVER_START_TIME, 1)
+
+    # Router metrics (already collected by RouterMetrics dataclass)
+    router_metrics = router_agent.metrics.to_dict()
+
+    # Compute P50 / P95 latency (RouterMetrics only exposes P99 natively)
+    routing_times = router_agent.metrics.routing_times
+    p50 = p95 = 0.0
+    if routing_times:
+        sorted_times = sorted(routing_times)
+        n = len(sorted_times)
+        p50 = sorted_times[int(n * 0.50)]
+        p95 = sorted_times[min(int(n * 0.95), n - 1)]
+    router_metrics["latency_ms"]["p50"] = round(p50, 2)
+    router_metrics["latency_ms"]["p95"] = round(p95, 2)
+    router_metrics["circuit_breaker"]["is_open"] = router_agent._circuit_open
+
+    with _metrics_lock:
+        pipeline_snapshot = {k: dict(v) for k, v in _pipeline_metrics.items()}
+        agent_snapshot = dict(_agent_execution_counts)
+
+    return {
+        "uptime_seconds": uptime_seconds,
+        "router": router_metrics,
+        "pipeline_validation": pipeline_snapshot,
+        "agent_execution_counts": agent_snapshot,
+        "specialist_agents_registered": list(specialist_agents.keys()),
     }
 
 

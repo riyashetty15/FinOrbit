@@ -4,10 +4,49 @@
 # ==============================================
 
 from typing import Dict, Any, Optional, Tuple
-import re
+import asyncio
+import json
 import logging
+import os
+import re
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# asyncpg pool — initialised lazily; silently disabled if DATABASE_URL unset
+# ---------------------------------------------------------------------------
+_db_pool = None
+_pool_lock = asyncio.Lock() if False else __import__("threading").Lock()
+_pool_ready = False
+
+
+async def _get_pool():
+    """Return the module-level asyncpg pool, creating it on first call."""
+    global _db_pool, _pool_ready
+    if _pool_ready:
+        return _db_pool
+
+    database_url = os.getenv("DATABASE_URL", "")
+    if not database_url:
+        _pool_ready = True  # disabled — do not retry
+        return None
+
+    try:
+        import asyncpg
+        _db_pool = await asyncpg.create_pool(
+            dsn=database_url,
+            min_size=1,
+            max_size=5,
+            command_timeout=5,
+        )
+        _pool_ready = True
+        logger.info("[ConversationContext] asyncpg pool connected")
+    except Exception as exc:
+        logger.warning(f"[ConversationContext] DB pool init failed, using in-memory only: {exc}")
+        _db_pool = None
+        _pool_ready = True
+
+    return _db_pool
 
 
 class ProfileExtractor:
@@ -196,7 +235,7 @@ class ConversationContext:
         if conversation_id not in ConversationContext._contexts:
             ConversationContext._contexts[conversation_id] = {
                 "last_agent": agent,
-                "profile": {},
+                "profile": dict(profile_updates),  # apply initial updates
                 "turn_count": 1
             }
         else:
@@ -275,3 +314,89 @@ class ConversationContext:
         if conversation_id in ConversationContext._contexts:
             del ConversationContext._contexts[conversation_id]
             logger.info(f"Cleared context for {conversation_id}")
+
+    # -----------------------------------------------------------------------
+    # Async PostgreSQL-backed methods (fall back to in-memory on DB errors)
+    # -----------------------------------------------------------------------
+
+    @staticmethod
+    async def get_context_async(conversation_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve conversation context, preferring PostgreSQL (24h TTL).
+
+        Falls back to in-memory dict if DATABASE_URL is not set or DB is
+        temporarily unavailable.
+        """
+        pool = await _get_pool()
+        if pool:
+            try:
+                async with pool.acquire() as conn:
+                    row = await conn.fetchrow(
+                        """
+                        SELECT last_agent, profile_json, turn_count
+                        FROM conversation_contexts
+                        WHERE conversation_id = $1
+                          AND updated_at > NOW() - INTERVAL '24 hours'
+                        """,
+                        conversation_id,
+                    )
+                if row:
+                    ctx = {
+                        "last_agent": row["last_agent"],
+                        "profile": json.loads(row["profile_json"]) if isinstance(row["profile_json"], str) else dict(row["profile_json"]),
+                        "turn_count": row["turn_count"],
+                    }
+                    # Keep in-memory in sync
+                    ConversationContext._contexts[conversation_id] = ctx
+                    return ctx
+                return None
+            except Exception as exc:
+                logger.warning(f"[ConversationContext] DB get failed, using in-memory: {exc}")
+
+        # Fallback
+        return ConversationContext.get_context(conversation_id)
+
+    @staticmethod
+    async def update_context_async(
+        conversation_id: str,
+        agent: str,
+        profile_updates: Dict[str, Any],
+    ) -> None:
+        """
+        Persist conversation context update to PostgreSQL and in-memory cache.
+
+        Uses INSERT … ON CONFLICT DO UPDATE so it is idempotent and handles
+        both new and returning conversations in one round-trip.
+        """
+        # Always update in-memory first (fast path + fallback)
+        ConversationContext.update_context(conversation_id, agent, profile_updates)
+
+        pool = await _get_pool()
+        if not pool:
+            return
+
+        try:
+            current = ConversationContext._contexts.get(conversation_id, {})
+            profile = current.get("profile", {})
+            turn_count = current.get("turn_count", 1)
+
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO conversation_contexts
+                        (conversation_id, last_agent, profile_json, turn_count, updated_at)
+                    VALUES ($1, $2, $3::jsonb, $4, NOW())
+                    ON CONFLICT (conversation_id) DO UPDATE
+                        SET last_agent  = EXCLUDED.last_agent,
+                            profile_json = EXCLUDED.profile_json,
+                            turn_count   = EXCLUDED.turn_count,
+                            updated_at   = NOW()
+                    """,
+                    conversation_id,
+                    agent,
+                    json.dumps(profile),
+                    turn_count,
+                )
+            logger.debug(f"[ConversationContext] Persisted context for {conversation_id} to DB")
+        except Exception as exc:
+            logger.warning(f"[ConversationContext] DB update failed (in-memory updated): {exc}")

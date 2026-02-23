@@ -10,8 +10,6 @@ import os
 import time
 from threading import Lock
 from dataclasses import dataclass, field
-from openai import OpenAI
-
 logger = logging.getLogger(__name__)
 
 
@@ -148,12 +146,20 @@ INTENT_MAP = {
     r"\b(score|cibil|credit score)\b": "fin_score",
     # Include plurals and common lender terms (e.g., NBFC) to avoid falling back to fin_advisor.
     r"\b(loans?|emis?|credit|borrow|mortgage|nbfc|lender|lending)\b": "credits_loans",
-    r"\b(invest|portfolio|mutual fund|stocks?)\b": "investment_coach",
+    # Expanded investment terms: ETF, NFO, small/mid/large/flexi cap, FD, NCD, PPF, ULIP, etc.
+    r"\b(invest|portfolio|mutual funds?|stocks?|shares?|equity|etf|exchange.traded funds?|"
+    r"nfo|new fund offer|smallcap|midcap|largecap|flexi.?cap|index funds?|"
+    r"fixed deposit|fd|ncd|non.?convertible debenture|ppf|public provident fund|ulip|"
+    r"nav|aum|folio|lump.?sum|sip|systematic\s+investment\s+plan)\b": "investment_coach",
     # Avoid matching generic 'coverage' (e.g., 'Liquidity Coverage Ratio'); require explicit insurance-related wording.
     r"\b(insurance|premium|term plan)\b|\binsurance coverage\b|\bcoverage amount\b": "insurance_analyzer",
-    r"\b(retir(e|ement)|pension|401k|nps)\b": "retirement_planner",
-    r"\b(tax|itr|deduction|exemption|section)\b": "tax_planner",
-    r"\b(fraud|suspicious|chargeback|phishing)\b": "fraud_shield",
+    # Expanded retirement terms: EPF, VPF, gratuity, superannuation.
+    r"\b(retir(e|ement)|pension|401k|nps|"
+    r"epf|employees?\s+provident\s+fund|vpf|voluntary\s+provident\s+fund|"
+    r"gratuity|superannuation|pf\s+withdrawal)\b": "retirement_planner",
+    # Expanded tax terms: TDS, GST, capital gains, HRA, Form 16, 80C/80D.
+    r"\b(tax|itr|deduction|exemption|section|tds|gst|capital\s+gains?|hra|form\s*16|80[cd])\b": "tax_planner",
+    r"\b(fraud|suspicious|chargeback|phishing|scam|otp\s+fraud|cyber\s+crime)\b": "fraud_shield",
 }
 
 # Multi-domain priority rules: if multiple intents match, these take precedence.
@@ -163,6 +169,9 @@ MULTI_DOMAIN_PRIORITY = {
     frozenset(["investment_coach", "tax_planner"]): "tax_planner",    # "ELSS for tax saving" → tax
     frozenset(["retirement_planner", "tax_planner"]): "tax_planner",  # "NPS tax benefit" → tax
     frozenset(["insurance_analyzer", "tax_planner"]): "tax_planner",  # "insurance premium tax deduction" → tax
+    # New entries
+    frozenset(["investment_coach", "retirement_planner"]): "retirement_planner",   # "EPF vs NPS" → retirement
+    frozenset(["credits_loans", "retirement_planner"]): "retirement_planner",      # "loan against EPF" → retirement
 }
 
 # Query intent patterns - distinguishes general vs personalized queries
@@ -205,6 +214,73 @@ class RouterAgent:
     Regex matching + conversation tracking is sufficient for financial domain routing.
     """
 
+    # Investment terms that strongly signal the investment_coach domain
+    _INVESTMENT_STRONG_TERMS = re.compile(
+        r"\b(sip|systematic\s+investment\s+plan|mutual\s+funds?|mf|etf|exchange.traded\s+funds?|"
+        r"equity|nfo|new\s+fund\s+offer|smallcap|midcap|largecap|flexi.?cap|"
+        r"index\s+funds?|lump.?sum|nav|aum|folio|portfolio|stocks?|shares?|"
+        r"elss|ulip|invest(ment|ing)?)\b",
+        re.IGNORECASE,
+    )
+
+    # Retirement terms that strongly signal the retirement_planner domain
+    _RETIREMENT_STRONG_TERMS = re.compile(
+        r"\b(epf|employees?\s+provident\s+fund|vpf|voluntary\s+provident\s+fund|"
+        r"nps|national\s+pension|ppf|public\s+provident\s+fund|"
+        r"retir(e|ement|ing)|pension|gratuity|superannuation|pf\s+withdrawal)\b",
+        re.IGNORECASE,
+    )
+
+    # Signals that the user wants the specific text of a regulatory document — not education
+    _REGULATORY_LOOKUP_SIGNALS = re.compile(
+        r"\b(circular\s+number|notification\s+dated|master\s+direction|as\s+per\s+sebi\s+circular|"
+        r"exact\s+text\s+of|specific\s+rule|guideline\s+text|rbi\s+circular|sebi\s+notification|"
+        r"irdai\s+regulation|regulation\s+\d+|schedule\s+[ivxlcdm]+|sebi/[a-z]+/[a-z]+)\b",
+        re.IGNORECASE,
+    )
+
+    def _is_domain_investment_query(self, query: str) -> bool:
+        """
+        Return True if the query is primarily about investment concepts or advice
+        and does NOT require fetching a specific regulatory document.
+
+        When True, the LLM RAG heuristic is bypassed entirely and the query falls
+        through directly to INTENT_MAP domain matching → investment_coach.
+
+        Examples that return True:
+            "What is SIP and how does SEBI regulate it?"
+            "How do mutual funds work under SEBI rules?"
+            "What are SEBI mutual fund regulations?"  ← educational, not doc-lookup
+            "Explain ETF vs index fund"
+
+        Examples that return False (stays in RAG path):
+            "What does SEBI circular SEBI/HO/IMD/2024/01 say exactly?"
+            "Show me the master direction on NBFCs"
+        """
+        has_investment_terms = bool(self._INVESTMENT_STRONG_TERMS.search(query))
+        has_specific_regulatory_lookup = bool(self._REGULATORY_LOOKUP_SIGNALS.search(query))
+        return has_investment_terms and not has_specific_regulatory_lookup
+
+    def _is_domain_retirement_query(self, query: str) -> bool:
+        """
+        Return True if the query is primarily about retirement planning concepts
+        and does NOT require fetching a specific regulatory document.
+
+        When True, the LLM RAG heuristic is bypassed entirely and the query falls
+        through directly to INTENT_MAP domain matching → retirement_planner.
+
+        Examples that return True:
+            "What is EPF and how much can I withdraw?"
+            "How does NPS work?"
+            "Explain VPF vs EPF"
+
+        Examples that return False (stays in RAG path):
+            "What does EPFO circular say about EPF withdrawal?"
+        """
+        has_retirement_terms = bool(self._RETIREMENT_STRONG_TERMS.search(query))
+        has_specific_regulatory_lookup = bool(self._REGULATORY_LOOKUP_SIGNALS.search(query))
+        return has_retirement_terms and not has_specific_regulatory_lookup
+
     def __init__(self):
         """Initialize router with LLM-based RAG detection, caching, and circuit breaker"""
         self._gemini_configured = False
@@ -226,19 +302,20 @@ class RouterAgent:
         # Confidence threshold (configurable)
         self._confidence_threshold = float(os.getenv("RAG_CONFIDENCE_THRESHOLD", "0.7"))
         
-        api_key = os.getenv("LLM_API_KEY")
-        self._model_name = os.getenv("CUSTOM_MODEL_NAME", "gpt-4o-mini")
-        if api_key:
-            try:
-                self._openai_client = OpenAI(api_key=api_key)
-                self._gemini_configured = True
-                logger.info(f"Router initialized with OpenAI LLM-based RAG detection (confidence_threshold={self._confidence_threshold})")
-            except Exception as e:
-                self._openai_client = None
-                logger.warning(f"Failed to initialize OpenAI: {e}, falling back to keyword routing")
-        else:
-            self._openai_client = None
-            logger.warning("No LLM_API_KEY found, using keyword-only routing")
+        try:
+            from backend.core.llm_provider import get_llm_provider
+            self._llm_provider = get_llm_provider()
+            self._model_name = self._llm_provider.model_name
+            self._gemini_configured = True
+            logger.info(
+                f"Router initialized with LLM-based RAG detection "
+                f"(provider={type(self._llm_provider).__name__}, model={self._model_name}, "
+                f"confidence_threshold={self._confidence_threshold})"
+            )
+        except Exception as e:
+            self._llm_provider = None
+            self._model_name = os.getenv("CUSTOM_MODEL_NAME", "gpt-4o-mini")
+            logger.warning(f"LLMProvider unavailable: {e}, falling back to keyword-only routing")
 
     def _simple_rag_heuristic(self, query: str) -> bool:
         """Keyword-only RAG trigger used when no LLM is configured.
@@ -401,7 +478,7 @@ class RouterAgent:
     
     def _keyword_based_rag_check(self, query: str) -> bool:
         """Ask LLM if query needs RAG lookup"""
-        if not self._gemini_configured:
+        if not self._llm_provider:
             return (False, 0.0, "LLM not available")
         
         try:
@@ -419,7 +496,7 @@ NEEDS RAG (return true) ONLY if asking for:
 
 DOES NOT NEED RAG (return false) if:
 - General financial concepts or definitions
-- How-to advice or recommendations  
+- How-to advice or recommendations
 - Personal financial planning
 - Calculations or simulations
 - General market information
@@ -427,6 +504,8 @@ DOES NOT NEED RAG (return false) if:
 - Greetings or small talk (e.g., "hi", "hello", "thank you")
 - Questions asking for investment advice or recommendations
 - Vague queries without specific fund/regulation names
+- General investment education that mentions a regulator in passing (e.g., "How does SEBI regulate mutual funds?" is educational, NOT a specific document lookup)
+- Queries about investment vehicles (SIP, mutual funds, ETF, equity, portfolio) even if SEBI/RBI is mentioned — these should go to the investment specialist, not RAG
 
 IMPORTANT: RAG is ONLY for looking up specific factual data from documents.
 Personal information sharing or advice-seeking queries should return false.
@@ -434,17 +513,12 @@ Personal information sharing or advice-seeking queries should return false.
 Respond ONLY with valid JSON:
 {{"needs_rag": true/false, "confidence": 0.0-1.0, "reasoning": "brief explanation"}}"""
 
-            response = self._openai_client.chat.completions.create(
-                model=self._model_name,
-                messages=[
-                    {"role": "system", "content": "You are a financial query classifier. Always respond with valid JSON only."},
-                    {"role": "user", "content": prompt},
-                ],
+            result_text = self._llm_provider.complete(
+                user_prompt=prompt,
+                system_prompt="You are a financial query classifier. Always respond with valid JSON only.",
                 temperature=0.0,
                 max_tokens=200,
             )
-            
-            result_text = (response.choices[0].message.content or "").strip()
             
             import json
             # Gemini usually returns '```json ... ```', strict JSON mode handles this better
@@ -640,16 +714,32 @@ Respond ONLY with valid JSON:
             logger.info(f"Router using hinted agent: {hinted}")
             return hinted
         
-        # First, apply high-precision keyword heuristic for clear RAG cases
-        needs_rag = self._simple_rag_heuristic(query)
-        
-        # If heuristic says RAG is needed, we can skip LLM-based routing
-        if needs_rag:
-            logger.info("Keyword heuristic indicates RAG is required; skipping LLM routing.")
-        
-        # Otherwise, check if query needs RAG using LLM (with keyword fallback)
-        
-        if not needs_rag and self._gemini_configured:
+        # Pre-emption: if query is clearly about a specialist domain (not a specific
+        # regulatory document lookup), skip RAG heuristic AND the LLM call entirely.
+        _preempted = False
+        if self._is_domain_investment_query(query):
+            logger.info(
+                "Domain pre-emption: investment terms detected without specific regulatory "
+                "document request → bypassing RAG heuristic, routing to investment_coach"
+            )
+            needs_rag = False
+            _preempted = True
+        elif self._is_domain_retirement_query(query):
+            logger.info(
+                "Domain pre-emption: retirement terms detected without specific regulatory "
+                "document request → bypassing RAG heuristic, routing to retirement_planner"
+            )
+            needs_rag = False
+            _preempted = True
+        else:
+            # First, apply high-precision keyword heuristic for clear RAG cases
+            needs_rag = self._simple_rag_heuristic(query)
+            # If heuristic says RAG is needed, we can skip LLM-based routing
+            if needs_rag:
+                logger.info("Keyword heuristic indicates RAG is required; skipping LLM routing.")
+
+        # LLM RAG classifier — skipped when a domain pre-emption fired (_preempted=True)
+        if not needs_rag and not _preempted and self._gemini_configured:
             needs_rag, confidence, reasoning = self._ask_llm_needs_rag(query)
             
             # If LLM has low confidence, use keyword fallback
@@ -659,8 +749,8 @@ Respond ONLY with valid JSON:
                 if keyword_rag:
                     needs_rag = True
                     logger.info("Keyword check suggests RAG needed, overriding LLM")
-        elif not needs_rag:
-            # No LLM available and heuristic didn't trigger → keywords only
+        elif not needs_rag and not _preempted:
+            # No LLM available, no domain pre-emption, and heuristic didn't trigger → keywords only
             needs_rag = self._simple_rag_heuristic(query)
         
         if needs_rag:
