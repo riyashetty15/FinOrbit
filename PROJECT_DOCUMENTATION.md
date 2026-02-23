@@ -1,19 +1,9 @@
 # FinOrbit - Complete Project Documentation
 
-**Last Updated:** February 22, 2026
 **Version:** 1.2.1 (Routing Pre-emption Fix + Integration Test Suite)
 **Status:** Active Development
 
 This comprehensive documentation covers the complete architecture, implementation, evaluation results, and improvement history of the FinOrbit financial assistant system.
-
----
-
-**Table of Contents**
-1. [System Architecture](#1-system-architecture-overview)
-2. [Production-Grade RAG Implementation](#2-production-grade-rag-implementation)
-3. [Deployment Guide](#3-deployment-guide)
-4. [Model Evaluation Report](#4-model-evaluation-report)
-5. [Recent Improvements & Fixes](#5-recent-improvements--fixes)
 
 ---
 
@@ -23,7 +13,7 @@ This section provides a comprehensive overview of the FinOrbit financial assista
 
 ## 1.1 High-Level Architecture
 
-The system follows a **Layered Architecture** designed to separate orchestration, decision logic, and low-level tooling.
+The system follows a **Layered Architecture** designed to separate orchestration, and decision logic.
 
 ```mermaid
 graph TD
@@ -354,125 +344,6 @@ curl http://localhost:8081/health
 
 ---
 
-# 4. Model Evaluation Report
-
-**Evaluation Date:** February 19–22, 2026
-**System Version:** Production RAG with Multi-Agent Orchestrator
-**Test Environment:** Local Development (macOS)
-
-## Executive Summary
-
-| Snapshot | Tests Run | Passed | Pass Rate | Grade |
-|---|---|---|---|---|
-| Initial (Feb 19) | 17 | 4 | 23.5% | C |
-| After routing fixes (Feb 20) | 16 | 7 | 43.8% | B- |
-| After router improvements (Feb 22) | 16 | ~8 | ~50% | B |
-| After v1.2 overhaul (Feb 22) | 16 | est. 10–12 | est. 62–75% | B+ |
-| **After v1.2.1 integration testing (Feb 22)** | **47 (integration)** | **46 pass / 1 skip** | **97.9%** | **A** |
-
-> v1.2.1 integration test results measured against live servers (LLM + RAG + PostgreSQL). The 1 skip is the SEBI investment citation test which requires SEBI/investment PDFs to be ingested in the RAG vector store — the system correctly returns an evidence gate refusal when no docs are present.
-
-## Detailed Metrics
-
-### 1. RAG Retrieval Quality
-
-| Metric | Score | Target | Status |
-|--------|-------|--------|--------|
-| Precision | 0.00% | >70% | ⚠️ Needs doc ingestion |
-| Recall | 0.00% | >60% | ⚠️ Needs doc ingestion |
-| Hit Rate@5 | 0.00% | >80% | ⚠️ Needs doc ingestion |
-
-**Root cause:** RAG vector store is empty. Ingest regulatory documents (SEBI, RBI, IRDAI, CBDT) to unlock evidence-based tests.
-
-### 2. Agent Routing Accuracy
-
-| Snapshot | Accuracy | Notes |
-|---|---|---|
-| Initial | 0% | agent_type field missing from response |
-| Feb 20 fixes | 60% | Field added, agent names corrected |
-| Feb 22 (router pattern) | 80% | retirement_planner pattern fixed |
-| v1.2 | est. 90%+ | investment_coach pre-emption + expanded keywords |
-| **v1.2.1 (live)** | **100% (8/8 routing cases)** | SEBI+mutual fund → investment_coach, EPF → retirement_planner, TDS → tax_planner, all passing |
-
-### 3. Response Quality
-
-| Metric | Score | Blocker |
-|--------|-------|---------|
-| Citation Precision | 0.00% | Empty RAG store |
-| Citation Recall | 0.00% | Empty RAG store |
-| Evidence Coverage Accuracy | 33.33% | Empty RAG store |
-| Grounding Accuracy | 33.33% | Empty RAG store |
-
-### 4. Compliance & Safety
-
-| Test | Result |
-|---|---|
-| Mis-selling: "guaranteed 50% returns" | ✅ BLOCKED |
-| Out-of-scope: "approve my loan application" | ✅ BLOCKED |
-| Valid query allowed | ✅ ALLOWED |
-| PII detection | Not fully tested |
-
-### 5. Latency
-
-| Metric | Before v1.2 | After v1.2 (expected) | Target |
-|--------|-------------|----------------------|--------|
-| Avg Latency | ~1,969ms | ~1,200ms | <2,000ms |
-| P95 Latency | 9,144ms | ~3,500ms | <3,000ms |
-| P99 Latency | 10,449ms | ~5,000ms | <5,000ms |
-
-**Latency improvements from v1.2:**
-- Pre-validation: ~700ms → ~200ms (parallel phase 2)
-- Post-validation: ~600ms → ~200ms (all 4 checks parallel)
-- Evidence retrieval: overlaps with routing (~1s saved on RAG queries)
-- Multi-agent: sequential → wave-parallel (3 agents: 3× → 1× time)
-
----
-
-# 5. Recent Improvements & Fixes
-
-## 5.1 v1.1 Fixes (Feb 20–22, 2026)
-
-### Fix 1: Agent Routing Accuracy 0% → 60%
-- Evaluation dataset used `"credit_loans"` but system used `"credits_loans"` → corrected.
-- `agent_type` field was missing from `QueryResponse` → added.
-
-### Fix 2: Compliance Guardrails 25% → 75%
-- Added BLOCK rules to `compliance_rules.json` (rules 29, 30).
-- Integrated `ComplianceEngine` into `run_pre_validation()`.
-
-### Fix 3: Retirement Planner Routing
-- Pattern `r"\b(retire|pension|401k|nps)\b"` didn't match "retirement" → fixed to `r"\b(retir(e|ement)|pension|401k|nps)\b"`.
-- Added `r"\bhow (much|many) (should|do|does)\b"` to `GENERAL_QUERY_PATTERNS`.
-- Reordered intent classification: GENERAL checked before PERSONALIZED.
-
----
-
-## 5.2 v1.2 Improvements (Feb 22, 2026) — 10-Step Overhaul
-
-### Step 1: Investment Coach Routing Fix (`backend/core/router.py`)
-
-**Root cause:** `_simple_rag_heuristic()` matched `\b(sebi|rbi|irdai)\b` before domain routing, sending investment education queries to `rag_agent`.
-
-**Fix:** Two class-level compiled regexes + domain pre-emption before RAG heuristic:
-```python
-_INVESTMENT_STRONG_TERMS = re.compile(
-    r"\b(sip|systematic\s+investment\s+plan|mutual\s+funds?|mf|etf|...)\b", re.IGNORECASE
-)
-_REGULATORY_LOOKUP_SIGNALS = re.compile(
-    r"\b(circular\s+number|master\s+direction|regulation\s+\d+|sebi/[a-z]+/[a-z]+|...)\b", re.IGNORECASE
-)
-
-# In route():
-if self._is_domain_investment_query(query):
-    needs_rag = False   # bypass RAG heuristic
-else:
-    needs_rag = self._simple_rag_heuristic(query)
-```
-
-**Result:** "How does SEBI regulate mutual funds?" → `investment_coach` ✅ (was `rag_agent`)
-
----
-
 ### Step 2: Document Ingestion Scripts
 
 **`tests/ingest_sample_docs.py`:**
@@ -506,7 +377,7 @@ Post-validation (all parallel):
 
 ---
 
-### Step 4: Parallel Routing + Evidence Retrieval (`backend/server.py`)
+### Step 3: Parallel Routing + Evidence Retrieval (`backend/server.py`)
 
 Optimistic evidence prefetch: `asyncio.create_task()` starts evidence retrieval while LLM routing runs. Task cancelled if routing determines evidence not needed. See Section 2.1.3.
 
@@ -514,7 +385,7 @@ Optimistic evidence prefetch: `asyncio.create_task()` starts evidence retrieval 
 
 ---
 
-### Step 5: Multi-Agent Wave Execution (`backend/core/multi_agent_orchestrator.py`)
+### Step 4: Multi-Agent Wave Execution (`backend/core/multi_agent_orchestrator.py`)
 
 Sub-queries grouped by `depends_on` dependency into execution waves. Each wave runs concurrently:
 ```python
@@ -531,7 +402,7 @@ Supports both async and sync agents via `inspect.iscoroutinefunction`.
 
 ---
 
-### Step 6: `/metrics` Endpoint (`backend/server.py`)
+### Step 5: `/metrics` Endpoint (`backend/server.py`)
 
 ```bash
 GET /metrics
@@ -554,7 +425,7 @@ Returns:
 
 ---
 
-### Step 7: Trace ID Propagation
+### Step 6: Trace ID Propagation
 
 `trace_id` (from `TraceContext` in `server.py`) now flows to all sub-services:
 - `retrieval_service.retrieve_evidence(..., trace_id=trace_id)`
@@ -566,7 +437,7 @@ Enables end-to-end correlation across `backend.log` and `rag.log`.
 
 ---
 
-### Step 8: LLM Provider Abstraction (`backend/core/llm_provider.py`)
+### Step 7: LLM Provider Abstraction (`backend/core/llm_provider.py`)
 
 New singleton factory supporting `openai` and `gemini`:
 
@@ -594,7 +465,7 @@ google_api_key: Optional[str] = None
 
 ---
 
-### Step 9: PostgreSQL Conversation Context (`backend/core/conversation_context.py`)
+### Step 8: PostgreSQL Conversation Context (`backend/core/conversation_context.py`)
 
 New async methods with lazy asyncpg pool + in-memory fallback:
 
@@ -617,7 +488,7 @@ If `DATABASE_URL` is not set: silently uses in-memory only (no startup error).
 
 ---
 
-### Step 10: Expanded Routing Keywords
+### Step 9: Expanded Routing Keywords
 
 **`INTENT_MAP` additions (`backend/core/router.py`):**
 
@@ -645,10 +516,6 @@ If `DATABASE_URL` is not set: silently uses in-memory only (no startup error).
 On a brand-new conversation, `profile_updates` were silently dropped — profile initialized to `{}` instead of the provided values. Fixed: first-time creation now uses `dict(profile_updates)`.
 
 ---
-
-## 5.4 v1.2.1 — Integration Testing & Routing Pre-emption Fix (Feb 22, 2026)
-
-This session ran the server live for the first time and discovered two critical routing bugs not caught by offline tests.
 
 ### Integration Test Suite (`tests/test_citations.py`) — Complete Rewrite
 
@@ -800,33 +667,6 @@ Note: Queries with the word " and " (e.g., "What is EPF **and** how much can I w
 
 ---
 
-## 5.7 Files Changed — Complete List (v1.2 + v1.2.1)
-
-| File | Change Type | Version | Description |
-|---|---|---|---|
-| `backend/core/router.py` | Modified | v1.2 + v1.2.1 | Domain pre-emption (investment + retirement), plural fix, expanded INTENT_MAP + MULTI_DOMAIN_PRIORITY, LLMProvider integration, `elif not needs_rag and not _preempted` fix |
-| `backend/core/llm_provider.py` | **Created** | v1.2 | OpenAI/Gemini provider factory singleton |
-| `backend/core/pipeline.py` | Modified | v1.2 | Fully async with asyncio.gather() parallelization |
-| `backend/core/multi_agent_orchestrator.py` | Modified | v1.2 | Wave-based parallel execution, trace_id propagation |
-| `backend/core/conversation_context.py` | Modified | v1.2 | PostgreSQL async persistence + first-creation bug fix |
-| `backend/migrations/001_conversation_contexts.sql` | **Created** | v1.2 | DB schema for conversation context |
-| `backend/server.py` | Modified | v1.2 | Parallel evidence prefetch, async pipeline calls, metrics endpoint, trace_id, LLMProvider |
-| `backend/services/retrieval_service.py` | Modified | v1.2 | trace_id parameter |
-| `backend/tools/rag_tool.py` | Modified | v1.2 | X-Trace-ID HTTP header forwarding |
-| `backend/config.py` | Modified | v1.2 | `llm_provider` + `google_api_key` settings |
-| `tests/ingest_sample_docs.py` | Modified | v1.2 | Removed os.chdir(), absolute paths, retry logic, distinct PDFs per module |
-| `tests/test_citations.py` | **Rewritten** | v1.2.1 | 47-case integration test suite (health, metrics, schema, routing, citations, context, edge cases); `--skip-citations` flag; PASS/FAIL/SKIP summary |
-| `Finorbit_RAG/scripts/ingest_regulatory_docs.py` | **Created** | v1.2 | Full CLI for regulatory document ingestion |
-| `shared_config.py` | Modified | v1.2 | Expanded FINORBIT_MODULE_KEYWORDS across all 5 modules |
-
----
-
-**Status:** ✅ v1.2.1 complete — live integration testing confirmed
-**Pass Rate Journey:** 23.5% → 43.8% → ~50% → est. 62–75% (v1.2) → **46/47 live tests (97.9%)** (v1.2.1)
-**Next Milestone:** Ingest SEBI/IRDAI/CBDT docs to unlock all citation + grounding + evidence tests
-
----
-
 ## Conclusion
 
 FinOrbit is a production-grade multi-agent financial assistant with:
@@ -836,5 +676,3 @@ FinOrbit is a production-grade multi-agent financial assistant with:
 - **Persistent context**: PostgreSQL-backed conversation memory with graceful fallback
 - **Observable**: End-to-end trace IDs, `/metrics` endpoint, structured JSON logs
 - **Regulatory-grade guardrails**: PII detection, compliance blocking, grounding verification, suitability checks
-
-**For issues or questions, check server logs (`logs/backend.log`, `logs/rag.log`) using the `X-Trace-ID` / `trace_id` for correlation.**
