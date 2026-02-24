@@ -15,34 +15,7 @@ This section provides a comprehensive overview of the FinOrbit financial assista
 
 The system follows a **Layered Architecture** designed to separate orchestration, and decision logic.
 
-```mermaid
-graph TD
-    User[User Client] --> API[FastAPI Server]
-
-    subgraph "Layer 1: Orchestration & Safety"
-        API --> Guardrails[Guardrail Pipeline]
-        Guardrails --> Router[Semantic Router]
-        Router --> Orchestrator[Multi-Agent Orchestrator]
-    end
-
-    subgraph "Layer 2: Services & Workflows"
-        Orchestrator --> RetService[Retrieval Service]
-        Orchestrator --> Workflows[Specialist Workflows]
-
-        Workflows -->|Loan/Tax/Invest| Decision[Decision Engine]
-        RetService -->|Evidence Pack| Decision
-    end
-
-    subgraph "Layer 3: Tooling (MCP Layer)"
-        Workflows --> MathTools[Finance Math Tools]
-        RetService --> RAGServer[RAG MCP Server]
-    end
-
-    subgraph "Layer 4: Data Infrastructure"
-        RAGServer --> PGVector[(Postgres + PGVector)]
-        RAGServer --> Ingestion[Ingestion Pipeline]
-    end
-```
+![Flowchart](https://github.com/user-attachments/assets/8c5ccf8c-de6e-4736-98d1-396e4e705aff)
 
 ## 1.2 Component Breakdown
 
