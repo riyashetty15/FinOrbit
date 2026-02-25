@@ -607,9 +607,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contact
 
-For questions, issues, or collaboration, feel free to connect with me here or on LinkedIn.
-
-- **[LinkedIn](https://www.linkedin.com/in/riyashetty1598/)**
+For questions, issues, or collaboration, feel free to connect with me here or on **[LinkedIn](https://www.linkedin.com/in/riyashetty1598/)**.
 
 Also read more on [Medium](https://riyashetty1598.medium.com/)
 
