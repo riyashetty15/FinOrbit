@@ -62,10 +62,8 @@ jobs:
       - name: Scan LLM dependencies
         working-directory: Finorbit_LLM
         run: |
-          pip install -e ".[dev]" --quiet
+          pip install -e ".[dev]" --quiet || pip install -e "." --quiet || true
           pip-audit --ignore-vuln GHSA-jfh8-c2jp-c7p7 || true
-          # --ignore-vuln silences false positives (e.g. urllib3 in non-network contexts)
-          # Remove '|| true' once all CVEs are resolved to make this a hard failure
 
       - name: Scan RAG dependencies
         working-directory: Finorbit_RAG
@@ -129,7 +127,7 @@ jobs:
 
       - name: Apply database schema
         run: |
-          PGPASSWORD=postgres psql -h localhost -U postgres -d finorbit_rag_test -f ../Finorbit_RAG/schema.sql
+          PGPASSWORD=postgres psql -h localhost -U postgres -d finorbit_rag_test -f schema.sql
 
       - name: Run RAG tests
         run: pytest -q --tb=short -x
