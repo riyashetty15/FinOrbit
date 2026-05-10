@@ -53,7 +53,7 @@ MAX_TOTAL_CHARS = 16000    # absolute safety net
 
 # RAG Service Health Check
 RAG_HEALTH_CHECK_TIMEOUT = 5  # seconds
-RAG_QUERY_TIMEOUT = 20  # seconds
+RAG_QUERY_TIMEOUT = 8  # seconds — tight budget to keep P99 < 5s
 
 
 def _check_rag_config():

@@ -7,11 +7,27 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, asdict
 
 # Import RAG tool
-# Adjust import path based on actual location. 
+# Adjust import path based on actual location.
 # Assuming backend/tools/rag_tool.py exists based on previous file reads.
 from backend.tools.rag_tool import knowledge_lookup
 
 logger = logging.getLogger(__name__)
+
+# Lazy-loaded cross-encoder re-ranker (loaded on first use to avoid slow startup)
+_cross_encoder = None
+
+def _get_cross_encoder():
+    """Load cross-encoder model once and cache it."""
+    global _cross_encoder
+    if _cross_encoder is None:
+        try:
+            from sentence_transformers import CrossEncoder
+            _cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", max_length=512)
+            logger.info("[OK] Cross-encoder re-ranker loaded: ms-marco-MiniLM-L-6-v2")
+        except Exception as e:
+            logger.warning(f"[WARN] Cross-encoder unavailable, skipping re-ranking: {e}")
+            _cross_encoder = "unavailable"
+    return None if _cross_encoder == "unavailable" else _cross_encoder
 
 @dataclass
 class Citation:
@@ -52,6 +68,47 @@ class EvidencePack:
     
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
+
+
+def _rerank_chunks(query: str, chunks: List[Dict[str, Any]], top_n: int = 6) -> List[Dict[str, Any]]:
+    """
+    Re-rank retrieved chunks using a cross-encoder model.
+
+    Cross-encoders jointly encode the (query, chunk) pair, giving much
+    better relevance signals than cosine similarity alone.  Falls back
+    to the original cosine-sorted list if the model is unavailable.
+
+    Args:
+        query: User query text
+        chunks: Retrieved chunks from vector search (already similarity-filtered)
+        top_n: How many top-ranked chunks to keep
+
+    Returns:
+        Re-ranked and trimmed chunk list
+    """
+    if not chunks:
+        return chunks
+
+    model = _get_cross_encoder()
+    if model is None:
+        return chunks[:top_n]
+
+    try:
+        pairs = [(query, c.get("text", "")[:512]) for c in chunks]
+        scores = model.predict(pairs)
+        ranked = sorted(zip(scores, chunks), key=lambda x: x[0], reverse=True)
+        reranked = [c for _, c in ranked[:top_n]]
+        # Overwrite the score field with cross-encoder score (normalised to 0-1 via sigmoid)
+        import math
+        for i, (score, _) in enumerate(ranked[:top_n]):
+            reranked[i] = dict(reranked[i])
+            reranked[i]["score"] = round(1 / (1 + math.exp(-score)), 4)
+        logger.debug(f"Cross-encoder re-ranked {len(chunks)} → {len(reranked)} chunks")
+        return reranked
+    except Exception as e:
+        logger.warning(f"[WARN] Re-ranking failed, using cosine order: {e}")
+        return chunks[:top_n]
+
 
 class RetrievalService:
     """
@@ -158,6 +215,13 @@ class RetrievalService:
         Verify chunks using LLM to ensure they actually answer the query.
         Returns reliable citations and a confidence score.
         """
+        if not chunks:
+            return [], 0.0
+
+        # Pre-filter: drop chunks below similarity threshold before calling the LLM judge.
+        # Cosine similarity < 0.72 is rarely relevant for financial regulatory queries.
+        SIMILARITY_CUTOFF = 0.72
+        chunks = [c for c in chunks if c.get("score", 1.0) >= SIMILARITY_CUTOFF]
         if not chunks:
             return [], 0.0
 
@@ -338,7 +402,7 @@ class RetrievalService:
             )
             
             raw_results = rag_output.get("results", [])
-            
+
             if not rag_output.get("found"):
                 return EvidencePack(
                     module=module,
@@ -350,7 +414,10 @@ class RetrievalService:
                     rejection_reason="No documents found in knowledge base."
                 )
 
-            # 3. Verification
+            # 3. Cross-encoder re-ranking (replaces pure cosine similarity ordering)
+            raw_results = await asyncio.to_thread(_rerank_chunks, query, raw_results, top_n=6)
+
+            # 4. Verification
             verified_citations, confidence = await self.verify_chunks(query, raw_results)
             
             # 4. Coverage Scoring

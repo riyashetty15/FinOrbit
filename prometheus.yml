@@ -1,0 +1,25 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    service: finorbit
+
+scrape_configs:
+  # LLM service — main app metrics
+  - job_name: finorbit_llm
+    static_configs:
+      - targets: ["llm:8000"]
+    metrics_path: /metrics/prometheus
+    scrape_interval: 15s
+
+  # RAG service — if it exposes a /metrics endpoint in future
+  - job_name: finorbit_rag
+    static_configs:
+      - targets: ["rag:8000"]
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # Prometheus itself
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

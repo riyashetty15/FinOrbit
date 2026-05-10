@@ -38,6 +38,9 @@ dependencies = [
 
     # HTTP Client (used by specialist agents)
     "requests>=2.32.0",
+
+    # Observability
+    "prometheus-client>=0.20.0",
 ]
 
 [project.optional-dependencies]

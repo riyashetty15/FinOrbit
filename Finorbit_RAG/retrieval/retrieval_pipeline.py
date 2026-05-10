@@ -131,6 +131,11 @@ class RetrievalPipeline(BaseRAGPipeline):
                 f"No nodes loaded for module '{module_name}', BM25Retriever not initialized"
             )
         
+        # Initialize reranker if enabled in config
+        self._reranker = None
+        if self.llamaindex_config.rerank_enabled:
+            self._init_reranker()
+
         self.logger.info(
             f"Initialized RetrievalPipeline for module '{module_name}' "
             f"with embedding model '{self.embedding_config.model_name}'"
@@ -147,6 +152,30 @@ class RetrievalPipeline(BaseRAGPipeline):
             "RetrievalPipeline is for querying only. "
             "Use TextIngestionPipeline for ingestion."
         )
+    def _init_reranker(self) -> None:
+        """
+        Lazily initialize the cross-encoder reranker.
+
+        Uses SentenceTransformerRerank from llama-index-postprocessor-sentence-transformer-rerank.
+        Falls back gracefully if the package is not installed.
+        Default model: cross-encoder/ms-marco-MiniLM-L-6-v2 (fast, effective for passage ranking).
+        Override via RERANK_MODEL env var.
+        """
+        try:
+            from llama_index.postprocessor.sentence_transformer_rerank import SentenceTransformerRerank
+            model = self.llamaindex_config.rerank_model or "cross-encoder/ms-marco-MiniLM-L-6-v2"
+            # top_n is overridden per-query; set a safe default here
+            self._reranker = SentenceTransformerRerank(model=model, top_n=10)
+            self.logger.info(f"Initialized SentenceTransformerRerank with model '{model}'")
+        except ImportError:
+            self.logger.warning(
+                "llama-index-postprocessor-sentence-transformer-rerank not installed. "
+                "Reranking disabled. Install with: "
+                "pip install llama-index-postprocessor-sentence-transformer-rerank"
+            )
+        except Exception as e:
+            self.logger.warning(f"Could not initialize reranker: {e}. Reranking disabled.")
+
     def _expand_with_neighbors(
         self,
         centers: List[NodeWithScore],
@@ -258,7 +287,7 @@ class RetrievalPipeline(BaseRAGPipeline):
             top_k: Number of results to return
             use_hyde: Use HyDE for enhanced retrieval (TODO: implement)
             use_hybrid: Use hybrid search (vector + BM25) - combines vector similarity and BM25 text search using QueryFusionRetriever with RRF
-            use_rerank: Use reranking for improved relevance (TODO: implement)
+            use_rerank: Use cross-encoder reranking for improved relevance (re-scores top_k*2 candidates)
             **kwargs: Additional parameters (doc_type, year, filename for filtering)
         
         Returns:
@@ -361,14 +390,24 @@ class RetrievalPipeline(BaseRAGPipeline):
             self.logger.error(f"Error during retrieval: {e}", exc_info=True)
             raise
         
-        # Handle reranking (TODO: implement)
+        # Reranking: re-score the candidate pool with a cross-encoder and keep top_k
         if use_rerank:
-            self.logger.warning("Reranking is requested but not yet implemented")
-            # TODO: Apply reranking
-            # from llama_index.core.postprocessor import SentenceTransformerRerank
-            # reranker = SentenceTransformerRerank(...)
-            # nodes = reranker.postprocess_nodes(nodes, query_str=query_text)
-            # nodes = nodes[:top_k]  # Take top_k after reranking
+            if self._reranker is None:
+                self._init_reranker()
+            if self._reranker is not None:
+                try:
+                    self._reranker.top_n = top_k  # return exactly top_k after reranking
+                    nodes = self._reranker.postprocess_nodes(nodes, query_str=query_text)
+                    self.logger.info(
+                        f"Reranking applied: {len(nodes)} results returned "
+                        f"(model={self.llamaindex_config.rerank_model or 'cross-encoder/ms-marco-MiniLM-L-6-v2'})"
+                    )
+                except Exception as e:
+                    self.logger.warning(f"Reranking failed: {e}. Truncating to top_k instead.")
+                    nodes = nodes[:top_k]
+            else:
+                self.logger.warning("Reranking requested but reranker unavailable. Truncating to top_k.")
+                nodes = nodes[:top_k]
         
         # Format results
         results = self._format_results(nodes, query_text, use_hyde, use_hybrid, use_rerank)

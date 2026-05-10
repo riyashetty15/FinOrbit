@@ -806,6 +806,28 @@ async def query_documents(
         )
 
 
+@app.post("/retrieve")
+async def retrieve_documents(
+    query: str = Body(..., description="Search query text"),
+    module: str = Body("credit", description="Module name (credit, investment, insurance, retirement, taxation)"),
+    top_k: int = Body(5, ge=1, le=50, description="Number of results to return"),
+    doc_type: Optional[str] = Body(None),
+    year: Optional[str] = Body(None),
+    year_min: Optional[int] = Body(None),
+    issuer: Optional[str] = Body(None),
+    jurisdiction: Optional[str] = Body(None),
+):
+    """Alias for /query used by the evaluation framework."""
+    return await query_documents(
+        query=query, module=module, top_k=top_k,
+        doc_type=doc_type, year=year, year_min=year_min,
+        issuer=issuer, jurisdiction=jurisdiction,
+        regulator_tag=None, security=None, is_current=None,
+        pii=None, effective_date=None, version=None,
+        compliance_tags_any=None,
+    )
+
+
 @app.post("/ingest_background")
 async def ingest_document_background(
     background_tasks: BackgroundTasks,

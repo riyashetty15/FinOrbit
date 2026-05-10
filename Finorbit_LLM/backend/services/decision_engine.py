@@ -243,8 +243,8 @@ class DecisionEngine:
                 rejection_reason="No evidence retrieval was performed."
             )
         
-        # If evidence coverage is insufficient or partial, refuse
-        if evidence_pack.coverage != "sufficient":
+        # Only block on zero citations — partial coverage (1-2 chunks) still passes
+        if evidence_pack.coverage == "insufficient":
             return DecisionEngine.create_evidence_refusal(
                 coverage=evidence_pack.coverage,
                 query=query,

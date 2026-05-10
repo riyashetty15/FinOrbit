@@ -1,0 +1,147 @@
+services:
+  # ────────────────────────────────────────────────────────────
+  # Database
+  # ────────────────────────────────────────────────────────────
+  postgres:
+    image: ankane/pgvector:latest
+    container_name: finorbit-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-financial_rag}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./Finorbit_RAG/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - finorbit-net
+    restart: unless-stopped
+
+  # ────────────────────────────────────────────────────────────
+  # RAG service
+  # ────────────────────────────────────────────────────────────
+  rag:
+    image: ${ACR_REGISTRY:-local}/finorbit-rag:${IMAGE_TAG:-latest}
+    build:
+      context: ./Finorbit_RAG
+    container_name: finorbit-rag
+    env_file: ./Finorbit_RAG/.env
+    environment:
+      DB_HOST: postgres
+      DB_NAME: ${DB_NAME:-financial_rag}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - model_cache:/root/.cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - finorbit-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+  # ────────────────────────────────────────────────────────────
+  # LLM service
+  # ────────────────────────────────────────────────────────────
+  llm:
+    image: ${ACR_REGISTRY:-local}/finorbit-llm:${IMAGE_TAG:-latest}
+    build:
+      context: ./Finorbit_LLM
+    container_name: finorbit-llm
+    env_file: ./Finorbit_LLM/.env
+    environment:
+      RAG_API_URL: http://rag:8000/query
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-financial_rag}
+    depends_on:
+      rag:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - finorbit-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 30s
+      timeout: 10s
+      start_period: 90s
+      retries: 3
+
+  # ────────────────────────────────────────────────────────────
+  # Nginx reverse proxy
+  # ────────────────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: finorbit-nginx
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - llm
+    networks:
+      - finorbit-net
+    restart: unless-stopped
+
+  # ────────────────────────────────────────────────────────────
+  # Prometheus — scrapes /metrics/prometheus from LLM service
+  # ────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: finorbit-prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+    ports:
+      - "9090:9090"
+    networks:
+      - finorbit-net
+    restart: unless-stopped
+
+  # ────────────────────────────────────────────────────────────
+  # Grafana — dashboards for Prometheus metrics
+  # ────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: finorbit-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - finorbit-net
+    restart: unless-stopped
+
+networks:
+  finorbit-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  model_cache:
+  prometheus_data:
+  grafana_data:

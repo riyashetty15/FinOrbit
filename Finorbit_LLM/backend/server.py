@@ -227,6 +227,56 @@ _metrics_lock = _Lock()
 _pipeline_metrics: Dict[str, Dict[str, int]] = defaultdict(lambda: {"pass": 0, "fail": 0})
 _agent_execution_counts: Dict[str, int] = defaultdict(int)
 
+# ---------------------------
+# Prometheus metrics
+# ---------------------------
+from prometheus_client import Counter, Gauge, Histogram, CollectorRegistry, generate_latest, CONTENT_TYPE_LATEST
+
+_prom_registry = CollectorRegistry()
+
+_prom_requests_total = Counter(
+    "finorbit_requests_total",
+    "Total queries processed",
+    ["module", "status"],
+    registry=_prom_registry,
+)
+_prom_llm_calls_total = Counter(
+    "finorbit_llm_calls_total",
+    "Total LLM API calls made by the router",
+    registry=_prom_registry,
+)
+_prom_cache_hits_total = Counter(
+    "finorbit_router_cache_hits_total",
+    "Router cache hits",
+    registry=_prom_registry,
+)
+_prom_cache_misses_total = Counter(
+    "finorbit_router_cache_misses_total",
+    "Router cache misses",
+    registry=_prom_registry,
+)
+_prom_circuit_breaker_open = Gauge(
+    "finorbit_circuit_breaker_open",
+    "1 if LLM circuit breaker is open, 0 otherwise",
+    registry=_prom_registry,
+)
+_prom_confidence_score = Gauge(
+    "finorbit_avg_confidence_score",
+    "Rolling average confidence score of responses",
+    registry=_prom_registry,
+)
+_prom_request_latency = Histogram(
+    "finorbit_request_latency_ms",
+    "End-to-end request latency in milliseconds",
+    buckets=[100, 500, 1000, 2000, 5000, 10000],
+    registry=_prom_registry,
+)
+_prom_compliance_failures_total = Counter(
+    "finorbit_compliance_failures_total",
+    "Total post-validation compliance failures",
+    registry=_prom_registry,
+)
+
 
 # ---------------------------
 # Initialize Pipeline & Agents
@@ -337,6 +387,7 @@ async def process_query(request: QueryRequest):
         HTTPException: For blocked queries/responses with detailed reasons
     """
     with TraceContext() as trace_id:
+        _req_start = _time_module.time()
         log_event(logger, "query_received", "server", {
             "user_id": request.userId,
             "conversation_id": request.conversationId,
@@ -583,8 +634,8 @@ async def process_query(request: QueryRequest):
                         else:
                             evidence_pack = await retrieval_service.retrieve_evidence(
                                 query=user_input,
-                                module=None,
-                                top_k=8,
+                                module=route_intent.module,  # scope search to routed module
+                                top_k=10,
                                 filters=_ev_filters,
                                 trace_id=str(trace_id),
                             )
@@ -699,6 +750,44 @@ async def process_query(request: QueryRequest):
                         logger.exception("Failed to collect retrieved passages from specialist agent result")
 
                     log_event(logger, "specialist_agent_complete", agent_type, {
+                        "response_length": len(response_text)
+                    })
+
+                elif agent_type == "rag_agent" and not evidence_refusal:
+                    # RAG agent: answer grounded on retrieved citations
+                    log_event(logger, "executing_rag_agent", "rag_agent", {
+                        "has_evidence": evidence_pack is not None,
+                        "citations": len(evidence_pack.citations) if evidence_pack else 0,
+                    })
+                    from backend.core.llm_provider import get_llm_provider
+                    try:
+                        provider = get_llm_provider()
+                        if evidence_pack and evidence_pack.citations:
+                            context_passages = "\n\n".join(
+                                f"[Source {i+1}: {c.source or 'Unknown'}]\n{c.text}"
+                                for i, c in enumerate(evidence_pack.citations)
+                            )
+                            rag_prompt = (
+                                f"Answer the following question using ONLY the source passages provided below. "
+                                f"Cite the source numbers inline (e.g. [Source 1]). "
+                                f"If the passages do not contain enough information, say so.\n\n"
+                                f"Question: {user_input}\n\n"
+                                f"Source Passages:\n{context_passages}"
+                            )
+                        else:
+                            rag_prompt = full_context
+                        response_text = await provider.async_complete(
+                            user_prompt=rag_prompt,
+                            system_prompt=finorbit_instructions.strip(),
+                            max_tokens=2048,
+                            temperature=0.2,
+                        )
+                        if not response_text:
+                            response_text = _hallucination_fallback_message()
+                    except Exception as _rag_err:
+                        logger.error(f"RAG agent failed: {_rag_err}")
+                        response_text = _hallucination_fallback_message()
+                    log_event(logger, "rag_agent_complete", "rag_agent", {
                         "response_length": len(response_text)
                     })
 
@@ -1049,6 +1138,12 @@ async def process_query(request: QueryRequest):
             # Generate follow-up suggestions based on agent type
             follow_ups = _generate_follow_ups(agent_type, profile, needs_clarification)
 
+            # Prometheus instrumentation
+            _elapsed_ms = (_time_module.time() - _req_start) * 1000
+            _prom_request_latency.observe(_elapsed_ms)
+            _prom_requests_total.labels(module=agent_type, status="success").inc()
+            _prom_confidence_score.set(confidence.overall_score)
+
             return QueryResponse(
                 response=response_text,
                 confidence_score=confidence.overall_score,
@@ -1100,6 +1195,7 @@ async def process_query(request: QueryRequest):
             raise HTTPException(status_code=400, detail=f"Validation error: {e}")
 
         except Exception as e:
+            _prom_requests_total.labels(module="unknown", status="error").inc()
             log_event(logger, "unexpected_error", "server", {"error": str(e)}, level="ERROR")
             logger.exception("Unexpected error occurred", exc_info=True)
             raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
@@ -1176,6 +1272,27 @@ async def get_metrics():
         "agent_execution_counts": agent_snapshot,
         "specialist_agents_registered": list(specialist_agents.keys()),
     }
+
+
+@app.get("/metrics/prometheus")
+async def get_prometheus_metrics():
+    """
+    Expose metrics in Prometheus text format for scraping by Prometheus server.
+    Syncs internal counters/gauges with prometheus_client before responding.
+    """
+    from fastapi.responses import Response
+
+    # Sync router snapshot into Prometheus gauges/counters
+    router_m = router_agent.metrics
+    _prom_circuit_breaker_open.set(1.0 if router_agent._circuit_open else 0.0)
+    if router_m.confidence_scores:
+        import statistics
+        _prom_confidence_score.set(statistics.mean(router_m.confidence_scores))
+
+    return Response(
+        content=generate_latest(_prom_registry),
+        media_type=CONTENT_TYPE_LATEST,
+    )
 
 
 # ---------------------------

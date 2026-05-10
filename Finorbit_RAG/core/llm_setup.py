@@ -51,7 +51,7 @@ def configure_global_llm():
                 from llama_index.llms.openai import OpenAI
                 
                 # Default to gpt-3.5-turbo if not specified
-                model_name = model or "gpt-3.5-turbo"
+                model_name = model or "gpt-4o-mini"
                 
                 Settings.llm = OpenAI(
                     model=model_name,
