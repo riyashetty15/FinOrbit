@@ -122,7 +122,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
+          pip install --upgrade pip pytest
           # Skip packages unavailable for this Python version
           grep -v "sentence-transformer-rerank" requirements.txt | pip install -r /dev/stdin
 
