@@ -358,7 +358,7 @@ if os.path.isdir(STATIC_DIR):
     app.mount("/ui/static", StaticFiles(directory=STATIC_DIR), name="ui-static")
 
 # Database connection
-DATABASE_URL = re.sub(r'^postgresql:', 'postgresql+asyncpg:', os.getenv('DATABASE_URL'))
+DATABASE_URL = re.sub(r'^postgresql:', 'postgresql+asyncpg:', os.getenv('DATABASE_URL') or '')
 
 
 # ---------------------------

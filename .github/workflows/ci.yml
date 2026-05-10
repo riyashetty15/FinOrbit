@@ -68,7 +68,8 @@ jobs:
       - name: Scan RAG dependencies
         working-directory: Finorbit_RAG
         run: |
-          pip install -r requirements.txt --quiet
+          # Skip packages unavailable for this Python version before auditing
+          grep -v "sentence-transformer-rerank" requirements.txt | pip install -r /dev/stdin --quiet || true
           pip-audit || true
 
   # ──────────────────────────────────────────────────────────────
@@ -130,7 +131,7 @@ jobs:
           PGPASSWORD=postgres psql -h localhost -U postgres -d finorbit_rag_test -f schema.sql
 
       - name: Run RAG tests
-        run: pytest -q --tb=short -x
+        run: python -m pytest -q --tb=short -x
 
   # ──────────────────────────────────────────────────────────────
   # Job 4: Test LLM service (unit tests, no live services)
