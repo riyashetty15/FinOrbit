@@ -144,8 +144,9 @@ class RouterMetrics:
 # Intent pattern matching for non-RAG agents (RAG handled by LLM)
 INTENT_MAP = {
     r"\b(score|cibil|credit score)\b": "fin_score",
-    # Include plurals and common lender terms (e.g., NBFC) to avoid falling back to fin_advisor.
-    r"\b(loans?|emis?|credit|borrow|mortgage|nbfc|lender|lending)\b": "credits_loans",
+    # Include plurals and common lender terms. Exclude bare "nbfc" — regulatory NBFC queries
+    # (e.g. "Can an NBFC sponsor an IDF?") should go through RAG, not the loan product agent.
+    r"\b(loans?|emis?|credit score|borrow|mortgage|lender|lending)\b": "credits_loans",
     # Expanded investment terms: ETF, NFO, small/mid/large/flexi cap, FD, NCD, PPF, ULIP, etc.
     r"\b(invest|portfolio|mutual funds?|stocks?|shares?|equity|etf|exchange.traded funds?|"
     r"nfo|new fund offer|smallcap|midcap|largecap|flexi.?cap|index funds?|"
@@ -231,11 +232,14 @@ class RouterAgent:
         re.IGNORECASE,
     )
 
-    # Signals that the user wants the specific text of a regulatory document — not education
+    # Signals that the user wants the specific text of a regulatory document — not education.
+    # Also includes structural/eligibility terms (sponsor, IDF, infrastructure debt fund) that
+    # indicate an NBFC/regulatory question even when investment vocabulary is present.
     _REGULATORY_LOOKUP_SIGNALS = re.compile(
         r"\b(circular\s+number|notification\s+dated|master\s+direction|as\s+per\s+sebi\s+circular|"
         r"exact\s+text\s+of|specific\s+rule|guideline\s+text|rbi\s+circular|sebi\s+notification|"
-        r"irdai\s+regulation|regulation\s+\d+|schedule\s+[ivxlcdm]+|sebi/[a-z]+/[a-z]+)\b",
+        r"irdai\s+regulation|regulation\s+\d+|schedule\s+[ivxlcdm]+|sebi/[a-z]+/[a-z]+|"
+        r"sponsor|idf|infrastructure\s+debt\s+fund)\b",
         re.IGNORECASE,
     )
 

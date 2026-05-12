@@ -219,8 +219,8 @@ class RetrievalService:
             return [], 0.0
 
         # Pre-filter: drop chunks below similarity threshold before calling the LLM judge.
-        # Cosine similarity < 0.72 is rarely relevant for financial regulatory queries.
-        SIMILARITY_CUTOFF = 0.72
+        # Cosine similarity < 0.40 is rarely relevant for financial regulatory queries.
+        SIMILARITY_CUTOFF = 0.40
         chunks = [c for c in chunks if c.get("score", 1.0) >= SIMILARITY_CUTOFF]
         if not chunks:
             return [], 0.0
