@@ -5,7 +5,6 @@ llama-index-core==0.14.7
 llama-index-vector-stores-postgres==0.7.1
 llama-index-embeddings-huggingface==0.6.1
 llama-index-retrievers-bm25==0.6.5
-llama-index-postprocessor-sentence-transformer-rerank==0.6.1
 # ============================================================================
 # Database & Vector Store
 # ============================================================================
