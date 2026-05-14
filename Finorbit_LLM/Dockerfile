@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y gcc g++ && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies via pyproject.toml
 COPY pyproject.toml .
+COPY backend/ backend/
 RUN pip install --upgrade pip && pip install -e .
 
 # Copy source
