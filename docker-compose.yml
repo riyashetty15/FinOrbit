@@ -35,6 +35,7 @@ services:
       DB_NAME: ${DB_NAME:-financial_rag}
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD}
+      APPLICATIONINSIGHTS_CONNECTION_STRING: ${APPLICATIONINSIGHTS_CONNECTION_STRING:-}
     volumes:
       - model_cache:/root/.cache
     depends_on:
@@ -62,6 +63,7 @@ services:
     environment:
       RAG_API_URL: http://rag:8000/query
       DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-financial_rag}
+      APPLICATIONINSIGHTS_CONNECTION_STRING: ${APPLICATIONINSIGHTS_CONNECTION_STRING:-}
     depends_on:
       rag:
         condition: service_healthy
@@ -94,48 +96,6 @@ services:
       - finorbit-net
     restart: unless-stopped
 
-  # ────────────────────────────────────────────────────────────
-  # Prometheus — scrapes /metrics/prometheus from LLM service
-  # ────────────────────────────────────────────────────────────
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: finorbit-prometheus
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--storage.tsdb.retention.time=15d"
-      - "--web.console.libraries=/etc/prometheus/console_libraries"
-      - "--web.console.templates=/etc/prometheus/consoles"
-    ports:
-      - "9090:9090"
-    networks:
-      - finorbit-net
-    restart: unless-stopped
-
-  # ────────────────────────────────────────────────────────────
-  # Grafana — dashboards for Prometheus metrics
-  # ────────────────────────────────────────────────────────────
-  grafana:
-    image: grafana/grafana:latest
-    container_name: finorbit-grafana
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
-      GF_USERS_ALLOW_SIGN_UP: "false"
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-    ports:
-      - "3000:3000"
-    depends_on:
-      - prometheus
-    networks:
-      - finorbit-net
-    restart: unless-stopped
-
 networks:
   finorbit-net:
     driver: bridge
@@ -143,5 +103,3 @@ networks:
 volumes:
   postgres_data:
   model_cache:
-  prometheus_data:
-  grafana_data:

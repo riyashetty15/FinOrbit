@@ -228,53 +228,43 @@ _pipeline_metrics: Dict[str, Dict[str, int]] = defaultdict(lambda: {"pass": 0, "
 _agent_execution_counts: Dict[str, int] = defaultdict(int)
 
 # ---------------------------
-# Prometheus metrics
+# Azure Monitor (Application Insights)
 # ---------------------------
-from prometheus_client import Counter, Gauge, Histogram, CollectorRegistry, generate_latest, CONTENT_TYPE_LATEST
+import os as _os
+from opentelemetry import metrics as _otel_metrics
 
-_prom_registry = CollectorRegistry()
+_appinsights_conn = _os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING")
+if _appinsights_conn:
+    from azure.monitor.opentelemetry import configure_azure_monitor
+    configure_azure_monitor(connection_string=_appinsights_conn)
+    logger.info("Azure Monitor (Application Insights) configured")
+else:
+    logger.warning("APPLICATIONINSIGHTS_CONNECTION_STRING not set — Azure Monitor disabled")
 
-_prom_requests_total = Counter(
-    "finorbit_requests_total",
-    "Total queries processed",
-    ["module", "status"],
-    registry=_prom_registry,
+# OpenTelemetry custom metrics (no-op if Azure Monitor not configured)
+_meter = _otel_metrics.get_meter("finorbit.llm")
+_otel_requests_counter = _meter.create_counter(
+    "finorbit.requests_total",
+    description="Total queries processed",
 )
-_prom_llm_calls_total = Counter(
-    "finorbit_llm_calls_total",
-    "Total LLM API calls made by the router",
-    registry=_prom_registry,
+_otel_latency_histogram = _meter.create_histogram(
+    "finorbit.request_latency_ms",
+    description="End-to-end request latency in milliseconds",
+    unit="ms",
 )
-_prom_cache_hits_total = Counter(
-    "finorbit_router_cache_hits_total",
-    "Router cache hits",
-    registry=_prom_registry,
+_otel_compliance_failures = _meter.create_counter(
+    "finorbit.compliance_failures_total",
+    description="Total post-validation compliance failures",
 )
-_prom_cache_misses_total = Counter(
-    "finorbit_router_cache_misses_total",
-    "Router cache misses",
-    registry=_prom_registry,
+_otel_confidence_gauge = _meter.create_observable_gauge(
+    "finorbit.avg_confidence_score",
+    callbacks=[lambda options: [_otel_metrics.Observation(router_agent.metrics.avg_confidence_score)]],
+    description="Rolling average confidence score of responses",
 )
-_prom_circuit_breaker_open = Gauge(
-    "finorbit_circuit_breaker_open",
-    "1 if LLM circuit breaker is open, 0 otherwise",
-    registry=_prom_registry,
-)
-_prom_confidence_score = Gauge(
-    "finorbit_avg_confidence_score",
-    "Rolling average confidence score of responses",
-    registry=_prom_registry,
-)
-_prom_request_latency = Histogram(
-    "finorbit_request_latency_ms",
-    "End-to-end request latency in milliseconds",
-    buckets=[100, 500, 1000, 2000, 5000, 10000],
-    registry=_prom_registry,
-)
-_prom_compliance_failures_total = Counter(
-    "finorbit_compliance_failures_total",
-    "Total post-validation compliance failures",
-    registry=_prom_registry,
+_otel_circuit_breaker_gauge = _meter.create_observable_gauge(
+    "finorbit.circuit_breaker_open",
+    callbacks=[lambda options: [_otel_metrics.Observation(1.0 if router_agent._circuit_open else 0.0)]],
+    description="1 if LLM circuit breaker is open, 0 otherwise",
 )
 
 
@@ -1138,11 +1128,10 @@ async def process_query(request: QueryRequest):
             # Generate follow-up suggestions based on agent type
             follow_ups = _generate_follow_ups(agent_type, profile, needs_clarification)
 
-            # Prometheus instrumentation
+            # Azure Monitor instrumentation
             _elapsed_ms = (_time_module.time() - _req_start) * 1000
-            _prom_request_latency.observe(_elapsed_ms)
-            _prom_requests_total.labels(module=agent_type, status="success").inc()
-            _prom_confidence_score.set(confidence.overall_score)
+            _otel_latency_histogram.record(_elapsed_ms, {"module": agent_type})
+            _otel_requests_counter.add(1, {"module": agent_type, "status": "success"})
 
             return QueryResponse(
                 response=response_text,
@@ -1195,7 +1184,7 @@ async def process_query(request: QueryRequest):
             raise HTTPException(status_code=400, detail=f"Validation error: {e}")
 
         except Exception as e:
-            _prom_requests_total.labels(module="unknown", status="error").inc()
+            _otel_requests_counter.add(1, {"module": "unknown", "status": "error"})
             log_event(logger, "unexpected_error", "server", {"error": str(e)}, level="ERROR")
             logger.exception("Unexpected error occurred", exc_info=True)
             raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
@@ -1274,25 +1263,6 @@ async def get_metrics():
     }
 
 
-@app.get("/metrics/prometheus")
-async def get_prometheus_metrics():
-    """
-    Expose metrics in Prometheus text format for scraping by Prometheus server.
-    Syncs internal counters/gauges with prometheus_client before responding.
-    """
-    from fastapi.responses import Response
-
-    # Sync router snapshot into Prometheus gauges/counters
-    router_m = router_agent.metrics
-    _prom_circuit_breaker_open.set(1.0 if router_agent._circuit_open else 0.0)
-    if router_m.confidence_scores:
-        import statistics
-        _prom_confidence_score.set(statistics.mean(router_m.confidence_scores))
-
-    return Response(
-        content=generate_latest(_prom_registry),
-        media_type=CONTENT_TYPE_LATEST,
-    )
 
 
 # ---------------------------

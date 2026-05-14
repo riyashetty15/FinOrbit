@@ -35,6 +35,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Azure Monitor (Application Insights)
+_appinsights_conn = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING")
+if _appinsights_conn:
+    from azure.monitor.opentelemetry import configure_azure_monitor
+    configure_azure_monitor(connection_string=_appinsights_conn)
+    logger.info("Azure Monitor (Application Insights) configured for RAG service")
+else:
+    logger.warning("APPLICATIONINSIGHTS_CONNECTION_STRING not set — Azure Monitor disabled")
+
 # ============================================================================
 # Pipeline Instance Cache
 # ============================================================================

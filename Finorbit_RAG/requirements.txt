@@ -60,3 +60,6 @@ fastapi==0.120.4
 uvicorn[standard]==0.34.0  # Fixed: 0.38.0 has loop_factory conflict with nest-asyncio
 python-multipart==0.0.20
 
+# Observability
+azure-monitor-opentelemetry>=1.6.0
+
