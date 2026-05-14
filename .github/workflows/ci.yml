@@ -291,14 +291,31 @@ jobs:
             # Rolling restart — postgres stays up, only app containers restart
             docker compose up -d --no-deps llm rag nginx
 
-            # Wait for containers to be healthy (LLM has 90s start-period)
-            sleep 90
-            docker compose ps
+            # Wait for containers to be healthy (up to 240s)
+            echo "Waiting for services to become healthy..."
+            for i in $(seq 1 24); do
+              llm_status=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' finorbit-llm 2>/dev/null || echo "missing")
+              rag_status=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' finorbit-rag 2>/dev/null || echo "missing")
+              echo "Attempt $i/24 — LLM: $llm_status | RAG: $rag_status"
 
-            # Health check — fails the deploy if service is down
-            curl -sf http://localhost/health || (echo "Health check failed" && exit 1)
+              if [ "$llm_status" = "healthy" ] && [ "$rag_status" = "healthy" ]; then
+                if curl -fsS http://localhost/health; then
+                  echo "Health check passed"
+                  break
+                fi
+              fi
 
-            echo "Deploy complete: ${{ steps.tag.outputs.tag }}"
+              if [ "$i" -eq 24 ]; then
+                echo "Health check failed"
+                docker compose ps
+                docker compose logs --tail=100 llm rag nginx
+                exit 1
+              fi
+
+              sleep 10
+            done
+
+            echo "Deploy complete"
 
       - name: Notify on failure
         if: failure()
