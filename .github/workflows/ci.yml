@@ -291,8 +291,8 @@ jobs:
             # Rolling restart — postgres stays up, only app containers restart
             docker compose up -d --no-deps llm rag nginx
 
-            # Wait for containers to be healthy
-            sleep 15
+            # Wait for containers to be healthy (LLM has 90s start-period)
+            sleep 90
             docker compose ps
 
             # Health check — fails the deploy if service is down
