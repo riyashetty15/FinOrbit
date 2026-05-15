@@ -8,6 +8,8 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y gcc g++ && rm -rf /var/lib/apt/lists/*
 
+RUN mkdir -p /app/logs
+
 # Install dependencies via pyproject.toml
 COPY pyproject.toml .
 COPY backend/ backend/
